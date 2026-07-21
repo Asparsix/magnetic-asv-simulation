@@ -1,0 +1,58 @@
+"/**/mag_driver":
+  ros__parameters:
+    publish_rate_hz: 20.0
+    gazebo_mag_topic: mag/gazebo
+    pose_topic: pose2d
+    cmd_vel_topic: cmd_vel
+    raw_topic: mag/raw
+    frame_id: asv1/mag_link
+    motor_on_threshold: 0.001
+    # Gazebo has no local mag sources — when enabled, mag_driver synthesizes
+    # a realistic Earth background + 1/r^3 dipole instead of the Gazebo field.
+    # anomaly(r) = dipole_strength_nt / (r^3 + soft^3), with soft=20 so the
+    # PEAK directly overhead (r=0) is strength/soft^3 = 50 nT:
+    #   50 nT @ 0 m, ~25 nT @ 20 m, ~11 nT @ 30 m, ~6 nT @ 40 m.
+    plant_magnetic_target: true
+    # Placed between the 20 m-spaced lawnmower legs (y=60 and y=80), so the
+    # boat detects it from ~10 m away but never drives directly over it.
+    target_x: -50.0
+    target_y: 70.0
+    dipole_strength_nt: 4.0e5
+    dipole_soft_m: 20.0
+    # Earth's total field is ~45,000 nT; sensor noise ~3 nT (1-sigma).
+    synthetic_background_nt: 45000.0
+    synthetic_noise_nt: 3.0
+
+"/**/mag_filter":
+  ros__parameters:
+    raw_topic: mag/raw
+    filtered_topic: mag/filtered
+    status_topic: mag/filter_status
+    lowpass_window: 5
+    spike_history: 20
+    # Gates in realistic nT: reject only jumps >> the ~3 nT noise and the
+    # smooth 1/r^3 gradient (a few nT per sample at survey speed).
+    spike_n_sigma: 10.0
+    min_std_nt: 1.0
+    status_rate_hz: 1.0
+
+"/**/calibration_node":
+  ros__parameters:
+    filtered_topic: mag/filtered
+    anomaly_topic: mag/anomaly
+    status_topic: calibration/status
+    area_size_m: 300.0
+    origin_x: -150.0
+    origin_y: -150.0
+    cell_size_m: 10.0
+    num_heading_bins: 8
+    min_cell_samples: 1
+    # Reject learning near the dipole so ambient baseline stays clean
+    # (above noise, below the ~50 nT peak so near-target cells stay out).
+    reject_residual_nt: 35.0
+    temporal_window: 12
+    noise_floor_nt: 0.0
+    ready_coverage_percent: 5.0
+    ready_min_cells: 8
+    freeze_baseline_when_ready: true
+    status_rate_hz: 1.0
