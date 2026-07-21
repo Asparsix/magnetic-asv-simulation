@@ -1,0 +1,20 @@
+# Topics captured for offline logic replay (no Gazebo needed later).
+# Prefer pose-mode replay for sensing/mapping experiments; anomaly-mode for
+# Bayes/mission-only experiments.
+topics:
+  - /asv1/pose2d
+  - /asv1/cmd_vel
+  - /asv1/odom
+  - /asv1/mag/raw
+  - /asv1/mag/filtered
+  - /asv1/mag/anomaly
+  - /asv1/mission/state
+  - /asv1/mission/mode
+  - /swarm/belief/peak
+  - /swarm/belief/peak_probability
+  - /swarm/belief/centroid
+  - /swarm/belief/centroid_mass
+  - /swarm/belief/centroid_spread
+  - /swarm/belief/fix
+  - /swarm/belief/fix_rms
+  - /swarm/belief/fix_samples

@@ -1,0 +1,37 @@
+# Gazebo thruster topics remain absolute (plugin defaults).
+- ros_topic_name: "/model/simple_boat/joint/left_propeller_joint/cmd_thrust"
+  gz_topic_name: "/model/simple_boat/joint/left_propeller_joint/cmd_thrust"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: ROS_TO_GZ
+
+- ros_topic_name: "/model/simple_boat/joint/right_propeller_joint/cmd_thrust"
+  gz_topic_name: "/model/simple_boat/joint/right_propeller_joint/cmd_thrust"
+  ros_type_name: "std_msgs/msg/Float64"
+  gz_type_name: "gz.msgs.Double"
+  direction: ROS_TO_GZ
+
+# Per-ASV ROS namespace /asv1
+- ros_topic_name: "/asv1/imu/data"
+  gz_topic_name: "/boat/imu"
+  ros_type_name: "sensor_msgs/msg/Imu"
+  gz_type_name: "gz.msgs.IMU"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/asv1/gps/fix"
+  gz_topic_name: "/boat/gps"
+  ros_type_name: "sensor_msgs/msg/NavSatFix"
+  gz_type_name: "gz.msgs.NavSat"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/asv1/mag/gazebo"
+  gz_topic_name: "/boat/magnetometer"
+  ros_type_name: "sensor_msgs/msg/MagneticField"
+  gz_type_name: "gz.msgs.Magnetometer"
+  direction: GZ_TO_ROS
+
+- ros_topic_name: "/asv1/odom"
+  gz_topic_name: "/model/simple_boat/odometry"
+  ros_type_name: "nav_msgs/msg/Odometry"
+  gz_type_name: "gz.msgs.Odometry"
+  direction: GZ_TO_ROS
