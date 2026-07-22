@@ -1,0 +1,27 @@
+los_path_follower:
+  ros__parameters:
+    control_rate_hz: 10.0
+    lookahead_m: 15.0
+    accept_radius_m: 8.0
+    pass_epsilon_m: 2.0
+    loop: true
+    u_ref: 0.35
+    u_max: 0.5
+    r_max: 0.3
+    patrol_half_size: 120.0
+    pose_timeout_s: 1.0
+    odom_topic: odom
+    plan_topic: plan
+    active_plan_topic: plan/active
+    cmd_vel_topic: cmd_vel
+    debug_topic: nav/debug
+    use_builtin_path: true
+    kp_yaw: 1.5
+    ki_yaw: 0.05
+    kd_yaw: 0.2
+    integral_limit_yaw: 1.0
+    kp_u: 1.0
+    ki_u: 0.1
+    kd_u: 0.0
+    integral_limit_u: 1.0
+    speed_mode: open_loop

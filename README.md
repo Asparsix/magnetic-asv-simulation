@@ -4,13 +4,23 @@ An independent ROS 2 Jazzy and Gazebo Harmonic simulation of the NIOT
 differential-thrust boat. The workspace contains all model and world assets;
 it does not require `niot_ws` at runtime.
 
-The default world is a **300 m × 300 m lake** with shoreline collision,
-a central island, dock, and marker buoys. Autonomous navigation uses
+## Repository layout
+
+| Folder | Contents |
+|--------|----------|
+| `src/` (root) | Original single-ASV tree |
+| `version_2/` | Validated single-ASV pipeline (300 m lake) |
+| `version_3/` | Dual-ASV cooperative search (300 m lake) |
+| `version_4/` | **3-ASV** cooperative search (**1 km** lake) |
+
+The default world is a **1000 m × 1000 m lake** with shoreline collision,
+a dock, and marker buoys. Autonomous navigation uses
 **LOS guidance + PID heading/speed control** to follow a built-in patrol
 route or an external `nav_msgs/Path`.
 
-ASV ROS topics are namespaced under **`/asv1/...`** (multi-ASV ready).
-Custom interfaces live in the **`boat_msgs`** package.
+ASV ROS topics are namespaced under **`/asv1/...`** (and `/asv2/...`,
+`/asv3/...` when `num_asvs` > 1). Custom interfaces live in the **`boat_msgs`**
+package.
 
 ## Build
 
@@ -29,17 +39,126 @@ Start Gazebo, the ROS-Gazebo bridge, thrust mixer, and autonomous LOS follower:
 ros2 launch boat_bringup sim.launch.py
 ```
 
+### Multi-ASV Phase 1 (independent control)
+
+Two boats in the lake (`simple_boat` red, `simple_boat_2` blue), each with its
+own mixer / pose / bridge topics. No shared mission yet — just prove they
+move independently:
+
+```bash
+ros2 launch boat_bringup multi_asv_phase1.launch.py
+# Equivalent:
+# ros2 launch boat_bringup sim.launch.py num_asvs:=2 autonomy:=false \
+#   mission:=false sensing:=false mapping:=false
+```
+
+Drive them separately:
+
+```bash
+ros2 topic pub /asv1/cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.4}}" -r 10
+ros2 topic pub /asv2/cmd_vel geometry_msgs/msg/Twist "{angular: {z: 0.3}}" -r 10
+```
+
+Check poses:
+
+```bash
+ros2 topic echo /asv1/pose2d --once
+ros2 topic echo /asv2/pose2d --once
+```
+
+### Multi-ASV Phase 2 (regional Voronoi lawnmower)
+
+**2 ASVs** on the 1 km lake. Boats launch from shoreline corners:
+
+- ASV1 (`simple_boat`, red) at `(-450, -450)` — SW Voronoi region
+- ASV2 (`simple_boat_2`, blue) at `(450, -450)` — SE Voronoi region
+
+Each mission manager lawnmowers only its own geographic region (not interleaved
+lanes). No sensing/mapping yet — coverage only.
+
+```bash
+ros2 launch boat_bringup multi_asv_phase2.launch.py
+```
+
+Confirm disjoint plans:
+
+```bash
+ros2 topic echo /asv1/plan --once
+ros2 topic echo /asv2/plan --once
+```
+
+### Multi-ASV Phase 3 (shared magnetic belief)
+
+Same regional coverage, plus per-ASV sensing. `bayes_fusion` listens to both
+`/asv1/mag/anomaly` and `/asv2/mag/anomaly`, so both boats update one shared
+belief map and dipole fix.
+
+```bash
+ros2 launch boat_bringup multi_asv_phase3.launch.py
+```
+
+Watch fusion:
+
+```bash
+ros2 topic echo /swarm/belief/centroid --once
+ros2 topic echo /swarm/belief/fix --once
+```
+
+### Multi-ASV Phase 4 (1 km lake, 3 ASVs, cooperative verify)
+
+Full stack on the **1000 m × 1000 m** lake with **three** shoreline-started boats:
+
+- ASV1 red `(-450, -450)` SW
+- ASV2 blue `(450, -450)` SE
+- ASV3 green `(450, 450)` NE
+
+Voronoi regional coverage → shared belief → cooperative verification:
+
+- Discoverer finishes spiral → **HOLD** + `/swarm/verify/declare`
+- Coordinator assigns a **different** ASV (`prefer_other_verifier`)
+- Verifier approaches the orbit from the **opposite side** of the discoverer
+- On success → `/swarm/mission/complete` + halt all boats
+
+```bash
+ros2 launch boat_bringup multi_asv_phase4.launch.py
+```
+
+Watch assignment:
+
+```bash
+ros2 topic echo /swarm/mission/status
+ros2 topic echo /swarm/verify/request --once
+ros2 topic echo /swarm/verify/result --once
+```
+
 The GUI launch also opens a live trajectory window showing:
 - measured boat track,
 - active LOS route,
 - current position and heading arrow,
-- lake shoreline and island.
+- lake shoreline.
 
 Headless:
 
 ```bash
 ros2 launch boat_bringup sim.launch.py headless:=true
 ```
+
+Fast physics mode (tested default: requested 2× RTF, 2 ms / 500 Hz physics):
+
+```bash
+ros2 launch boat_bringup sim.launch.py headless:=true fast:=true
+# Optional bounded tuning:
+ros2 launch boat_bringup sim.launch.py headless:=true fast:=true \
+  fast_factor:=2.0 fast_step_size:=0.002
+```
+
+Fast mode bridges Gazebo `/clock` and drives controller, sensing, mapping, and
+mission timers with simulation time. On the development machine, 60 simulated
+seconds completed in 37.2 wall seconds (~1.6×) and the pose differed by 4.7 m
+from the original 1 ms run, within half of the 10 m belief-cell width. A 4 ms
+trial was faster but rejected because its 6.5 m pose difference was too large.
+Normal mode retains the original 1 ms physics and wall-clock timers for final
+validation. Actual acceleration remains CPU-dependent.
 
 Disable only the plot window:
 
@@ -53,6 +172,45 @@ Manual teleop mode (disables the LOS follower):
 ros2 launch boat_bringup sim.launch.py autonomy:=false
 ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r cmd_vel:=/asv1/cmd_vel
 ```
+
+## Record once, replay many times (no Gazebo)
+
+Gazebo is only needed to capture a mission bag. After that, tune sensing /
+Bayes / centroid / thresholds by replaying the bag — same continuous boat
+motion, but much faster and fully deterministic.
+
+### 1. Record a mission
+
+```bash
+# Runs the normal sim and writes a compressed bag under ~/simulation_ws/bags/
+ros2 launch boat_bringup record.launch.py headless:=true
+# Let the mission run (or Ctrl+C when you have enough data).
+```
+
+Optional: `bag_name:=my_run` or `fast:=true` (forwards into `sim.launch.py`).
+
+### 2. Replay without Gazebo
+
+```bash
+# Rebuild mag → filter → calibration → Bayes from recorded pose (default).
+# rate:=5 plays five times faster than the original wall time.
+ros2 launch boat_bringup replay.launch.py \
+  bag:=$HOME/simulation_ws/bags/mission_YYYYMMDD_HHMMSS \
+  mode:=from_pose rate:=5.0
+
+# Or feed recorded MagAnomaly straight into Bayes/mission only:
+ros2 launch boat_bringup replay.launch.py \
+  bag:=$HOME/simulation_ws/bags/mission_YYYYMMDD_HHMMSS \
+  mode:=from_anomaly rate:=10.0
+```
+
+| Mode | Replays | Re-runs | Use when changing |
+|------|---------|---------|-------------------|
+| `from_pose` | `pose2d`, `cmd_vel` | mag_driver → filter → calibration → Bayes → mission | dipole, noise, filter, calibration, thresholds, centroid |
+| `from_anomaly` | `mag/anomaly` | Bayes → mission | belief/centroid/mission/verify only |
+
+Limitation: replay is open-loop. It will not test planner/control changes that
+alter where the boat drives — use live Gazebo for that.
 
 ## Part 0 interfaces (`boat_msgs`)
 
@@ -148,8 +306,14 @@ ros2 topic echo /asv1/calibration/status --once
 | Topic | Type |
 |-------|------|
 | `/swarm/belief/map` | `boat_msgs/BeliefGrid` |
-| `/swarm/belief/peak` | `geometry_msgs/PoseStamped` |
+| `/swarm/belief/peak` | `geometry_msgs/PoseStamped` (argmax cell) |
 | `/swarm/belief/peak_probability` | `std_msgs/Float64` |
+| `/swarm/belief/centroid` | `geometry_msgs/PoseStamped` (weighted centroid of high-p region) |
+| `/swarm/belief/centroid_mass` | `std_msgs/Float64` (probability mass in the region) |
+| `/swarm/belief/centroid_spread` | `std_msgs/Float64` (RMS uncertainty radius, m) |
+| `/swarm/belief/fix` | `geometry_msgs/PoseStamped` (dipole least-squares refinement) |
+| `/swarm/belief/fix_rms` | `std_msgs/Float64` (fit residual RMS, nT) |
+| `/swarm/belief/fix_samples` | `std_msgs/Float64` (number of samples in the fit) |
 
 Model: uniform prior, HIT/MISS/ABSTAIN from anomaly thresholds, likelihood from `Pdet(d) = Pbg + K/(d³+C)`.
 
@@ -207,7 +371,11 @@ ros2 topic echo /asv1/mission/state --once   # hunt_phase: INFO_GAIN | SPIRAL
 
 ## Part 6 spiral + swarm VERIFY
 
-After INFO_GAIN, the boat densifies with an expanding spiral around the belief peak, then declares a candidate. `verify_coordinator` assigns a verifier (same ASV for single-boat) which orbits and counts strong anomaly confirmations.
+After INFO_GAIN, the boat densifies with an expanding spiral around the belief **weighted centroid**, then declares that centroid as the candidate. `verify_coordinator` assigns a verifier (same ASV for single-boat) which orbits and counts strong anomaly confirmations.
+
+The declared position is the **belief-weighted centroid of cells with belief ≥ 0.5 × peak**, not the discrete peak cell. That gives sub-cell accuracy and a natural uncertainty (`centroid_spread`).
+
+Once enough strong anomaly samples are collected, `bayes_fusion` also runs a **dipole least-squares fix** (`A/(r³+soft³)`), published on `/swarm/belief/fix`. That continuous estimate typically beats the centroid once the boat has sampled around the source (spiral / verify orbit). The plotter shows both: magenta ★ = centroid, cyan ◆ = dipole fix.
 
 ```
 SPIRAL densify
