@@ -41,9 +41,9 @@
     filtered_topic: mag/filtered
     anomaly_topic: mag/anomaly
     status_topic: calibration/status
-    area_size_m: 300.0
-    origin_x: -150.0
-    origin_y: -150.0
+    area_size_m: 1000.0
+    origin_x: -500.0
+    origin_y: -500.0
     cell_size_m: 10.0
     num_heading_bins: 8
     min_cell_samples: 1

@@ -24,6 +24,6 @@ source install/setup.bash
 ros2 launch boat_bringup multi_asv_phase4.launch.py
 ```
 
-Coverage box is ±450 m with 50 m lawnmower spacing. Belief grid is 1000 m
-at **10 m** cells. Planted magnetic target for evaluation only: `(55, -35)` m —
-estimators do not read that pose.
+Coverage box is ±450 m with 50 m lawnmower spacing. Belief and calibration
+grids are 1000 m at **10 m** cells. Planted magnetic target for evaluation
+only: `(55, -35)` m — estimators do not read that pose.
