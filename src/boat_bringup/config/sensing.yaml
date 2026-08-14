@@ -5,7 +5,7 @@
     pose_topic: pose2d
     cmd_vel_topic: cmd_vel
     raw_topic: mag/raw
-    frame_id: asv1/mag_link
+    frame_id: mag_link
     motor_on_threshold: 0.001
     # Gazebo has no local mag sources — when enabled, mag_driver synthesizes
     # a realistic Earth background + 1/r^3 dipole instead of the Gazebo field.
@@ -13,10 +13,10 @@
     # PEAK directly overhead (r=0) is strength/soft^3 = 50 nT:
     #   50 nT @ 0 m, ~25 nT @ 20 m, ~11 nT @ 30 m, ~6 nT @ 40 m.
     plant_magnetic_target: true
-    # Placed between the 20 m-spaced lawnmower legs (y=60 and y=80), so the
-    # boat detects it from ~10 m away but never drives directly over it.
-    target_x: -50.0
-    target_y: 70.0
+    # Deep inside ASV2's SE Voronoi region (not on a shared boundary).
+    # Blind localization test: estimators never read this pose.
+    target_x: 220.0
+    target_y: 280.0
     dipole_strength_nt: 4.0e5
     dipole_soft_m: 20.0
     # Earth's total field is ~45,000 nT; sensor noise ~3 nT (1-sigma).
@@ -41,9 +41,9 @@
     filtered_topic: mag/filtered
     anomaly_topic: mag/anomaly
     status_topic: calibration/status
-    area_size_m: 300.0
-    origin_x: -150.0
-    origin_y: -150.0
+    area_size_m: 1000.0
+    origin_x: -500.0
+    origin_y: -500.0
     cell_size_m: 10.0
     num_heading_bins: 8
     min_cell_samples: 1

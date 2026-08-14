@@ -23,12 +23,12 @@
         </inertia>
       </inertial>
 
-      <!-- IMU -->
+      <!-- IMU: relative topic → /model/<entity>/... so multi-ASV does not collide -->
       <sensor name="imu_sensor" type="imu">
         <always_on>true</always_on>
         <update_rate>50</update_rate>
         <visualize>true</visualize>
-        <topic>/boat/imu</topic>
+        <topic>/model/simple_boat/imu</topic>
       </sensor>
 
       <!-- Magnetometer -->
@@ -36,7 +36,7 @@
         <always_on>1</always_on>
         <update_rate>100</update_rate>
         <visualize>true</visualize>
-        <topic>/boat/magnetometer</topic>
+        <topic>/model/simple_boat/magnetometer</topic>
 
         <magnetometer>
           <x>
@@ -64,7 +64,7 @@
       <sensor name="gps_sensor" type="navsat">
         <always_on>1</always_on>
         <update_rate>5</update_rate>
-        <topic>/boat/gps</topic>
+        <topic>/model/simple_boat/gps</topic>
       </sensor>
 
       <!-- Physics collision (UNCHANGED) -->
@@ -245,7 +245,8 @@
       <publish_collision_pose>false</publish_collision_pose>
       <publish_visual_pose>false</publish_visual_pose>
       <publish_nested_model_pose>false</publish_nested_model_pose>
-      <topic>/model/simple_boat/link_pose</topic>
+      <!-- Relative → /model/<entity>/pose after the world include renames the model -->
+      <topic>/model/simple_boat/pose</topic>
 
     </plugin>
 
@@ -256,6 +257,7 @@
       <dimensions>3</dimensions>
       <odom_frame>simple_boat/odom</odom_frame>
       <robot_base_frame>simple_boat/base_footprint</robot_base_frame>
+      <!-- Relative → /model/<entity>/odometry -->
       <odom_topic>/model/simple_boat/odometry</odom_topic>
       <odom_publish_frequency>50</odom_publish_frequency>
 

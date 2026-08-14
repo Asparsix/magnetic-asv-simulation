@@ -1,0 +1,8 @@
+{
+  "complete": true,
+  "status": "MISSION_COMPLETE:verifier=asv1:conf=4:p=0.521",
+  "target": [
+    85.0,
+    40.0
+  ]
+}

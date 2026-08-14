@@ -1,0 +1,60 @@
+\chapter{Mathematical algorithms}
+\label{ch:algorithms}
+
+\section{Planted dipole (simulation evaluation only)}
+\[
+  a(\mathbf{p})=\frac{A}{r^{3}+s^{3}},
+  \qquad r=\lVert\mathbf{p}-\mathbf{t}\rVert_{2}.
+\]
+Defaults in \texttt{sensing.yaml}: \(A=4\times10^{5}\,\mathrm{nT\cdot m^{3}}\),
+\(s=20\,\mathrm{m}\) $\Rightarrow$ \(50\,\mathrm{nT}\) overhead. Current planted
+pose in \texttt{version\_3}: \(\mathbf{t}=(85,40)\,\mathrm{m}\). Estimators
+never read \(\mathbf{t}\); they see only cleaned anomalies.
+
+\section{Detection probability}
+\[
+  P_{\mathrm{det}}(d)=P_{\mathrm{bg}}+(P_{\max}-P_{\mathrm{bg}})
+  \frac{d_{1/2}^{3}}{d^{3}+d_{1/2}^{3}}.
+\]
+Defaults: \(P_{\mathrm{bg}}=0.05\), \(P_{\max}=0.95\), \(d_{1/2}=30\,\mathrm{m}\).
+
+\section{HIT / MISS / ABSTAIN}
+With cleaned anomaly \(a_{\mathrm{cl}}\): HIT if
+\(a_{\mathrm{cl}}\ge\tau_{\mathrm{hit}}\) (default \(15\,\mathrm{nT}\)); MISS if
+\(\le\tau_{\mathrm{miss}}\) (default \(5\,\mathrm{nT}\)); else ABSTAIN.
+\texttt{hit\_only: true} treats MISS as ABSTAIN.
+
+\section{Bayesian grid update}
+Uniform prior on an \(N\times N\) grid (\(\Delta=10\,\mathrm{m}\),
+\(300\,\mathrm{m}\) map, origin \((-150,-150)\)). On HIT,
+\(b_k\leftarrow b_k P_{\mathrm{det}}(d_k)\) then renormalize. Peak is
+\(\arg\max b_k\). Centroid averages cells with
+\(b_k\ge\alpha b_{\max}\) (\(\alpha=0.5\)).
+
+\section{Dipole least-squares fix}
+Buffer samples with \(a_i\ge a_{\min}\); fit \((t_x,t_y,A)\) in the same
+\(A/(r^{3}+s^{3})\) family. Continuous estimate typically reaches few-metre
+error after spiral/verify sampling (\texttt{/swarm/belief/fix}).
+
+\section{Coverage and hunt geometry}
+\begin{description}[style=nextline,leftmargin=1.2cm]
+  \item[Strip lawnmower (v3 default)] Split \([x_{\min},x_{\max}]\) into \(N\)
+        vertical strips with dead gap \(g=20\,\mathrm{m}\); row spacing
+        \(15\,\mathrm{m}\). Avoids seam meetings of naive Voronoi partitions.
+  \item[Mutual information] Score ring candidates by expected entropy reduction
+        under the HIT/MISS model; replan periodically (radii \(10/20/30\,\mathrm{m}\)).
+  \item[Expanding spiral (inland-safe)] Concentric rings about the centroid.
+        Radius is \emph{shrunk} so the full circle stays inside the coverage box
+        with inset \(10\,\mathrm{m}\) --- never clamp points onto the shore wall
+        (that piled waypoints on \(x=\pm120\) and threw boats through Gazebo
+        colliders).
+  \item[Verify orbit] Circle about candidate (radius \(\le\min(20,r_{\mathrm{fit}})\));
+        peer entry angle opposite the discoverer; long approaches use \(\sim40\,\mathrm{m}\) transit hops.
+\end{description}
+
+\section{LOS guidance (short)}
+\[
+\psi_{\mathrm{cmd}}=\psi_{\mathrm{path}}+\operatorname{atan2}(-e_{\perp},L),\qquad L=15\,\mathrm{m}.
+\]
+Empty \texttt{plan} clears the follower (HOLD $\Rightarrow$ zero \texttt{cmd\_vel}).
+Thrust mixer: \(T_{L,R}=\mathrm{clip}((v\mp\omega g)S)\).

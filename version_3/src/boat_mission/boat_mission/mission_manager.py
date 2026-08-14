@@ -25,8 +25,10 @@ from boat_mission.path_planning import (
     generate_expanding_spiral,
     generate_region_lawnmower,
     generate_split_lawnmower,
+    generate_strip_lawnmower,
     generate_verification_orbit,
     opposite_approach_angle,
+    transit_waypoints,
 )
 from boat_mission.verify_core import VerificationTracker
 from boat_navigation.path_utils import make_path
@@ -73,12 +75,16 @@ class MissionManager(Node):
         self.declare_parameter('lawnmower_spacing', 40.0)
         self.declare_parameter('lawnmower_asv_index', 0)
         self.declare_parameter('lawnmower_num_asvs', 1)
-        # 'voronoi' = geographic regions (default multi-ASV); 'lanes' = interleaved Y
-        self.declare_parameter('lawnmower_partition', 'voronoi')
-        # Flat [x1,y1,x2,y2,...] shoreline seeds. Non-empty default so ROS types
-        # this as DOUBLE_ARRAY (an empty [] would be inferred as BYTE_ARRAY).
+        # 'strips' = vertical corridors (preferred multi-ASV, no seam meetings)
+        # 'voronoi' = geographic Voronoi cells; 'lanes' = interleaved Y
+        self.declare_parameter('lawnmower_partition', 'strips')
+        # Dead corridor width between vertical strips (metres).
+        self.declare_parameter('strip_gap_m', 20.0)
+        # Keep lawnmower paths inset from Voronoi seams (voronoi mode only).
+        self.declare_parameter('region_safety_margin_m', 15.0)
+        # Flat [x1,y1,x2,y2,...] shoreline seeds / spawn hints.
         self.declare_parameter(
-            'region_seeds', [-110.0, -110.0, 110.0, -110.0]
+            'region_seeds', [-85.0, -110.0, 0.0, -110.0, 85.0, -110.0]
         )
         self.declare_parameter('control_rate_hz', 2.0)
 
@@ -108,6 +114,9 @@ class MissionManager(Node):
         self.declare_parameter('spiral_min_duration_s', 45.0)
         self.declare_parameter('spiral_complete_peak_p', 0.25)
         self.declare_parameter('spiral_complete_radius_m', 40.0)
+        # Keep hunt / verify rings inland of the coverage box so Gazebo shore
+        # colliders are never pressed (see path_planning.max_radius_inside_bounds).
+        self.declare_parameter('path_inland_inset_m', 10.0)
 
         self.declare_parameter('self_verify', True)
         self.declare_parameter('verify_orbit_radius_m', 20.0)
@@ -154,6 +163,10 @@ class MissionManager(Node):
         self.lawnmower_partition = str(
             self.get_parameter('lawnmower_partition').value
         ).strip().lower()
+        self.strip_gap_m = float(self.get_parameter('strip_gap_m').value)
+        self.region_safety_margin_m = float(
+            self.get_parameter('region_safety_margin_m').value
+        )
         seeds_raw = self.get_parameter('region_seeds').value
         self.region_seeds = [float(v) for v in seeds_raw] if seeds_raw else []
         # Single-ASV missions don't need region seeds; drop the dual default.
@@ -210,6 +223,9 @@ class MissionManager(Node):
         )
         self.spiral_complete_radius_m = float(
             self.get_parameter('spiral_complete_radius_m').value
+        )
+        self.path_inland_inset_m = float(
+            self.get_parameter('path_inland_inset_m').value
         )
         self.verify_orbit_radius_m = float(
             self.get_parameter('verify_orbit_radius_m').value
@@ -356,6 +372,15 @@ class MissionManager(Node):
         if self.mode in (self.MODE_COMPLETE, self.MODE_VERIFY):
             return
         if msg.verifier_id and msg.verifier_id != self.asv_id:
+            # Another boat was assigned — clear our path so we don't keep
+            # spiraling into the verifier / shore near the candidate.
+            if self.mode != self.MODE_HOLD:
+                self.mode = self.MODE_HOLD
+                self.hunt_phase = ''
+                self._publish_hold_plan()
+                self.get_logger().info(
+                    f'HOLD — verifier is {msg.verifier_id}, clearing path'
+                )
             return
         discoverer_xy = None
         if math.isfinite(msg.discoverer_x) and math.isfinite(msg.discoverer_y):
@@ -396,10 +421,12 @@ class MissionManager(Node):
         self._last_plan_signature = signature
 
     def _publish_hold_plan(self):
-        if self.pose is None:
-            return
-        x, y = self.pose.x, self.pose.y
-        self._publish_plan([(x, y), (x + 0.5, y)], force=True)
+        """Clear the LOS follower path so it publishes zero cmd_vel."""
+        path = Path()
+        path.header.frame_id = 'map'
+        path.header.stamp = self.get_clock().now().to_msg()
+        self.plan_pub.publish(path)
+        self._last_plan_signature = ('hold',)
 
     def _publish_state(self):
         state = MissionState()
@@ -543,6 +570,7 @@ class MissionManager(Node):
             ring_spacing=self.spiral_ring_spacing_m,
             margin_min=(self.min_x, self.min_y),
             margin_max=(self.max_x, self.max_y),
+            inland_inset_m=self.path_inland_inset_m,
         )
         if self.pose is not None:
             points = [(self.pose.x, self.pose.y)] + points
@@ -590,7 +618,15 @@ class MissionManager(Node):
         )
         self._declare_candidate()
 
-        if self.self_verify or bool(self.get_parameter('force_verify').value):
+        # Multi-ASV: stay in HOLD for peer verification. Solo / force path
+        # may self-verify immediately.
+        if bool(self.get_parameter('force_verify').value):
+            estimate = self._estimate_xy()
+            if estimate is not None:
+                self._start_verify(estimate, reason='force_verify')
+        elif self.self_verify:
+            # Hand off: if a peer verifier is preferred, wait for the
+            # coordinator request instead of orbiting the shore ourselves.
             estimate = self._estimate_xy()
             if estimate is not None:
                 self._start_verify(estimate, reason='self_verify_after_spiral')
@@ -638,9 +674,15 @@ class MissionManager(Node):
             margin_min=(self.min_x, self.min_y),
             margin_max=(self.max_x, self.max_y),
             start_angle=start_angle,
+            inland_inset_m=self.path_inland_inset_m,
         )
         if self.pose is not None:
-            points = [(self.pose.x, self.pose.y)] + points
+            # Long peer-verify transits: break into ~40 m hops so LOS does not
+            # sit on a single 200 m segment (looks "stuck" if odom drops mid-way).
+            transit = transit_waypoints(
+                (self.pose.x, self.pose.y), points[0], spacing_m=40.0
+            )
+            points = transit + points
         self._publish_plan(points, force=True)
         self._verify_orbit_published = True
         side = 'opposite' if discoverer_xy is not None else 'default'
@@ -706,6 +748,22 @@ class MissionManager(Node):
                         f'lane_share={self.lawnmower_asv_index}/'
                         f'{self.lawnmower_num_asvs}'
                     )
+                elif self.lawnmower_partition == 'strips':
+                    points = generate_strip_lawnmower(
+                        self.min_x,
+                        self.max_x,
+                        self.min_y,
+                        self.max_y,
+                        self.lawnmower_spacing,
+                        asv_index=self.lawnmower_asv_index,
+                        num_asvs=self.lawnmower_num_asvs,
+                        gap_m=self.strip_gap_m,
+                    )
+                    share_desc = (
+                        f'strip={self.lawnmower_asv_index}/'
+                        f'{self.lawnmower_num_asvs} '
+                        f'gap={self.strip_gap_m:.0f}m'
+                    )
                 else:
                     points = generate_region_lawnmower(
                         self.min_x,
@@ -716,13 +774,22 @@ class MissionManager(Node):
                         asv_index=self.lawnmower_asv_index,
                         num_asvs=self.lawnmower_num_asvs,
                         seeds=self.region_seeds or None,
+                        safety_margin_m=self.region_safety_margin_m,
                     )
                     share_desc = (
                         f'region={self.lawnmower_asv_index}/'
-                        f'{self.lawnmower_num_asvs} partition=voronoi'
+                        f'{self.lawnmower_num_asvs} partition=voronoi '
+                        f'margin={self.region_safety_margin_m:.0f}m'
                     )
-                if self.pose is not None:
-                    points = [(self.pose.x, self.pose.y)] + points
+                if self.pose is not None and points:
+                    dist0 = math.hypot(
+                        self.pose.x - points[0][0],
+                        self.pose.y - points[0][1],
+                    )
+                    # Already on the first waypoint (spawned on-path) — do not
+                    # prepend pose or the first LOS segment becomes ~0 length.
+                    if dist0 > 5.0:
+                        points = [(self.pose.x, self.pose.y)] + points
                 self._publish_plan(points, force=True)
                 self._lawnmower_published = True
                 self.get_logger().info(

@@ -13,10 +13,10 @@
     # PEAK directly overhead (r=0) is strength/soft^3 = 50 nT:
     #   50 nT @ 0 m, ~25 nT @ 20 m, ~11 nT @ 30 m, ~6 nT @ 40 m.
     plant_magnetic_target: true
-    # Arbitrary open-water spot, off the lawnmower lane grid for a blind
-    # localization test.
-    target_x: 55.0
-    target_y: -35.0
+    # Deep inside ASV2's SE Voronoi region (not on a shared boundary).
+    # Blind localization test: estimators never read this pose.
+    target_x: 220.0
+    target_y: 280.0
     dipole_strength_nt: 4.0e5
     dipole_soft_m: 20.0
     # Earth's total field is ~45,000 nT; sensor noise ~3 nT (1-sigma).

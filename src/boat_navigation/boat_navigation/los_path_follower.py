@@ -164,9 +164,9 @@ class LosPathFollower(Node):
 
         age = (self.get_clock().now() - self.last_odom_time).nanoseconds * 1e-9
         if age > self.pose_timeout_s:
-            self.get_logger().warn_throttle(
-                2.0,
+            self.get_logger().warn(
                 f'Stale odometry ({age:.2f}s); stopping',
+                throttle_duration_sec=2.0,
             )
             self.publish_stop()
             return

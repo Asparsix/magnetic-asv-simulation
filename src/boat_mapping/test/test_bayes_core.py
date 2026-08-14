@@ -85,3 +85,37 @@ def test_hit_only_skips_miss():
     label = belief.update(10.0, 10.0, anomaly_nt=0.1, is_calibrated=True)
     assert label == 'ABSTAIN'
     assert belief.belief == before
+
+
+def test_weighted_centroid_between_two_peaks():
+    """Two symmetric hits should pull the centroid to the midpoint."""
+    belief = BeliefMap(
+        area_size_m=100.0,
+        origin_x=0.0,
+        origin_y=0.0,
+        cell_size_m=10.0,
+        hit_threshold_nt=5.0,
+        miss_threshold_nt=1.0,
+    )
+    belief.update(30.0, 50.0, anomaly_nt=50.0, is_calibrated=True)
+    belief.update(50.0, 50.0, anomaly_nt=50.0, is_calibrated=True)
+    centroid = belief.weighted_centroid(threshold_frac=0.3)
+    # Symmetric evidence → centroid near x=40 (midpoint), y=50.
+    assert abs(centroid.x - 40.0) < 5.0
+    assert abs(centroid.y - 50.0) < 5.0
+    assert centroid.num_cells >= 2
+    assert 0.0 < centroid.mass <= 1.0
+    assert centroid.spread_m > 0.0
+
+
+def test_weighted_centroid_uniform_prior():
+    """With a flat prior the centroid sits at the grid centre."""
+    belief = BeliefMap(
+        area_size_m=100.0,
+        origin_x=0.0,
+        origin_y=0.0,
+        cell_size_m=10.0,
+    )
+    centroid = belief.weighted_centroid(threshold_frac=0.5)
+    assert abs(centroid.x - 50.0) < 1e-6
+    assert abs(centroid.y - 50.0) < 1e-6

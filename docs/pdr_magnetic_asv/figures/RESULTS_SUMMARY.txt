@@ -1,0 +1,18 @@
+Planted target (sensing.yaml): (85.0, 40.0) m
+Mission outcome: MISSION_COMPLETE
+  verifier = asv1
+  confirmations = 4 / 4
+  peak_p at complete ≈ 0.521
+  candidate declared by asv3 at (95.0, 15.0) with p=0.956
+
+Dipole LS fix (/swarm/belief/fix) vs planted (85,40):
+  best observed fix error during densified sampling: ~0.0 m (exact (85.0, 40.0), rms≈1.4 nT)
+  typical late-run median error (last 50 fix lines): ~5.8 m
+  example during ASV1 verify orbit: fix≈(85.0, 43.3) → err≈3.3 m; fix≈(84.8, 41.3) → err≈1.3 m
+
+Timeline (sim log, domain 43 Phase-4 run):
+  t≈0: planted dipole (85,40); strip lawnmowers published (ASV1/2/3)
+  ASV3: TARGET_SEARCH → SPIRAL (9 inland waypoints around ~99,15) → HOLD → declare
+  ASV2: HOLD (cleared path for verifier asv1)
+  ASV1: VERIFY opposite-approach orbit → 4 confirmations → COMPLETE
+  Swarm halt latched for all ASVs

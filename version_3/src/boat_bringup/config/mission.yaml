@@ -26,12 +26,16 @@
     max_x: 120.0
     min_y: -120.0
     max_y: 120.0
-    lawnmower_spacing: 20.0
+    # Track spacing 10 m (not the 20 m strip gap between ASVs).
+    lawnmower_spacing: 10.0
     lawnmower_asv_index: 0
     lawnmower_num_asvs: 1
-    lawnmower_partition: voronoi
-    # SW + SE south-boundary shoreline starts (2 ASVs)
-    region_seeds: [-110.0, -110.0, 110.0, -110.0]
+    # Vertical strips with a dead corridor between boats (no collisions).
+    lawnmower_partition: strips
+    strip_gap_m: 20.0
+    region_safety_margin_m: 15.0
+    # Spawn on first lawnmower waypoint of each strip (west / center / east)
+    region_seeds: [-120.0, -120.0, -33.333, -120.0, 53.333, -120.0]
     control_rate_hz: 2.0
 
     p_enter_target_search: 0.25
@@ -46,7 +50,7 @@
     info_gain_max_steps: 45
     info_gain_min_threshold: 1.0e-5
     info_gain_peak_convergence_m: 25.0
-    info_gain_radii: [10.0, 20.0, 30.0]
+    info_gain_radii: [5.0, 8.0, 10.0]
     info_gain_num_angles: 16
     info_gain_replan_period_s: 5.0
     info_gain_p_spiral: 0.5
@@ -54,15 +58,20 @@
     p_max: 0.95
     d_half: 30.0
 
-    spiral_ring_spacing_m: 15.0
-    spiral_max_radius_m: 80.0
-    spiral_step_spacing_m: 10.0
+    spiral_ring_spacing_m: 8.0
+    spiral_max_radius_m: 40.0
+    spiral_step_spacing_m: 8.0
     spiral_min_duration_s: 45.0
     spiral_complete_peak_p: 0.25
     spiral_complete_radius_m: 40.0
+    # Keep spiral / verify rings this far inside coverage bounds (±120).
+    path_inland_inset_m: 10.0
 
-    self_verify: true
-    verify_orbit_radius_m: 20.0
+    # Multi-ASV: peer verifies via verify_coordinator (prefer_other_verifier).
+    # Discoverer stays HOLD after declare so it does not re-orbit the shore.
+    self_verify: false
+    # Stay inside 7–10 m sensing range (HIT≥15 nT @5 m; ~14 nT @10 m with s=11.5).
+    verify_orbit_radius_m: 8.0
     verify_orbit_points: 12
     verify_confirmations_required: 4
     verify_arrival_radius_m: 30.0
@@ -77,5 +86,5 @@ verify_coordinator:
     result_topic: /swarm/verify/result
     complete_topic: /swarm/mission/complete
     halt_topic: /swarm/mission/halt
-    known_asvs: ['asv1', 'asv2']
+    known_asvs: ['asv1', 'asv2', 'asv3']
     prefer_other_verifier: true

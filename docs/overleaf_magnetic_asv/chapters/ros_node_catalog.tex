@@ -1,0 +1,1947 @@
+\chapter{ROS 2 Node Catalog --- Magnetic ASV Stack (\texttt{version\_3})}
+\label{ch:ros-catalog}
+
+This chapter is the authoritative software reference for every message, bridge, and node in the dual-ASV stack. Each node section lists identity, parameters, subscriptions, publications, timers, QoS, internal algorithm steps, and runtime dependencies.
+
+
+\textbf{Scope:} \texttt{/home/robot/simulation\_ws/version\_3}
+
+\textbf{Packages:} \texttt{boat\_control}, \texttt{boat\_sensing}, \texttt{boat\_mapping}, \texttt{boat\_mission}, \texttt{boat\_navigation}, plus \texttt{boat\_bringup} Gazebo bridges and \texttt{boat\_msgs}.
+
+\textbf{Source of truth:} executable Python nodes, \texttt{setup.py} entry points, \texttt{declare\_parameter} defaults, and \texttt{boat\_bringup/config/*.yaml} overrides as of this tree.
+
+
+\textbf{Topic naming convention used throughout}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lp{10cm}@{}}
+\toprule
+Form & Meaning \\
+\midrule
+\endfirsthead
+\toprule
+Form & Meaning \\
+\midrule
+\endhead
+\emph{relative} & No leading \texttt{/} --- resolved under the node's ROS namespace (e.g. node in \texttt{/asv1} → \texttt{cmd\_vel} becomes \texttt{/asv1/cmd\_vel}). \\
+\emph{absolute} & Leading \texttt{/} --- global name, not remapped by namespace (e.g. \texttt{/swarm/belief/peak}, \texttt{/model/simple\_boat/...}). \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\textbf{Typical launch namespaces} (\texttt{sim.launch.py}): ASV1 → \texttt{/asv1} + Gazebo model \texttt{simple\_boat}; ASV2 → \texttt{/asv2} + \texttt{simple\_boat\_2}. Swarm fusion / verify coordinator run at root (no ASV namespace).
+
+
+\textbf{Data-flow overview (one ASV + swarm)}
+
+
+\begin{verbatim}
+Gazebo ──(gz transport / ros_gz_bridge)──► odom, imu, gps, mag/gazebo, cmd_thrust
+gazebo_pose2d ──► pose2d
+los_path_follower ◄── odom, plan ──► cmd_vel ──► thrust_mixer ──► cmd_thrust
+mag_driver ◄── mag/gazebo?, pose2d, cmd_vel ──► mag/raw
+mag_filter ──► mag/filtered
+calibration_node ──► mag/anomaly, calibration/status
+bayes_fusion ◄── mag/anomaly(+) ──► /swarm/belief/*
+mission_manager ◄── pose, belief, anomaly, cal ──► plan, mission/*, verify declare
+verify_coordinator ◄── declare, result ──► request, halt, complete
+trajectory_plotter (viz)
+\end{verbatim}
+
+
+
+\chapter{Part I --- Custom Messages (\texttt{boat\_msgs})}
+\label{ch:ros-catalog}
+
+This chapter is the authoritative software reference for every message, bridge, and node in the dual-ASV stack. Each node section lists identity, parameters, subscriptions, publications, timers, QoS, internal algorithm steps, and runtime dependencies.
+
+
+\section{\texttt{MagReading.msg}}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}llp{7.2cm}@{}}
+\toprule
+Field & Type & Meaning \\
+\midrule
+\endfirsthead
+\toprule
+Field & Type & Meaning \\
+\midrule
+\endhead
+\texttt{header} & \texttt{std\_msgs/Header} & Stamp + \texttt{frame\_id} of the magnetometer sample. \\
+\texttt{bx}, \texttt{by}, \texttt{bz} & \texttt{float64} & Magnetic field components in nanotesla (nT). \\
+\texttt{scalar} & \texttt{float64} & \(\sqrt{b\_x^2+b\_y^2+b\_z^2}\) magnitude (nT). \\
+\texttt{x}, \texttt{y} & \texttt{float64} & Planar world pose at sample time (m). \\
+\texttt{heading} & \texttt{float64} & Yaw / heading at sample time (rad). \\
+\texttt{motor\_on} & \texttt{bool} & True when commanded thruster surge or yaw exceeds the driver's motor threshold (for future motor-state bins). \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\section{\texttt{MagAnomaly.msg}}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}llp{7.2cm}@{}}
+\toprule
+Field & Type & Meaning \\
+\midrule
+\endfirsthead
+\toprule
+Field & Type & Meaning \\
+\midrule
+\endhead
+\texttt{header} & \texttt{std\_msgs/Header} & Propagated from the filtered \texttt{MagReading}. \\
+\texttt{raw\_nt} & \texttt{float64} & Scalar field used as raw input to calibration (nT). \\
+\texttt{baseline\_nt} & \texttt{float64} & Estimated ambient baseline (nT); \texttt{nan} if not calibrated. \\
+\texttt{cleaned\_anomaly\_nt} & \texttt{float64} & Spatially/temporally cleaned anomaly feature for Bayes / mission (nT). \\
+\texttt{is\_calibrated} & \texttt{bool} & True when a usable baseline estimate exists for this sample. \\
+\texttt{heading\_bin} & \texttt{int32} & Discrete heading bin used for baseline lookup. \\
+\texttt{grid\_cell\_x}, \texttt{grid\_cell\_y} & \texttt{int32} & Baseline-map cell indices \((i,j)\). \\
+\texttt{x}, \texttt{y}, \texttt{heading} & \texttt{float64} & Pose/heading of the sample (m, rad). \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\section{\texttt{CalibrationStatus.msg}}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}p{2.1cm}p{2.1cm}p{2.1cm}p{2.1cm}p{3.2cm}@{}}
+\toprule
+Field & Type & Meaning &  &  \\
+\midrule
+\endfirsthead
+\toprule
+Field & Type & Meaning &  &  \\
+\midrule
+\endhead
+\texttt{header} & \texttt{std\_msgs/Header} & Status stamp; \texttt{frame\_id} set to \texttt{map}. &  &  \\
+\texttt{phase} & \texttt{string} & \texttt{CALIBRATING} \ & \texttt{READY} \ & \texttt{DEGRADED}. \\
+\texttt{cells\_sampled} & \texttt{int32} & Number of baseline cells that have received samples. &  &  \\
+\texttt{coverage\_percent} & \texttt{float32} & Percent of grid cells sampled. &  &  \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\section{\texttt{BeliefGrid.msg}}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}llp{7.2cm}@{}}
+\toprule
+Field & Type & Meaning \\
+\midrule
+\endfirsthead
+\toprule
+Field & Type & Meaning \\
+\midrule
+\endhead
+\texttt{header} & \texttt{std\_msgs/Header} & Map stamp; \texttt{frame\_id} = \texttt{map}. \\
+\texttt{resolution} & \texttt{float32} & Cell size (m). \\
+\texttt{origin\_x}, \texttt{origin\_y} & \texttt{float64} & World coordinates of the grid origin (m). \\
+\texttt{width}, \texttt{height} & \texttt{uint32} & Grid dimensions in cells. \\
+\texttt{data} & \texttt{float64[]} & Row-major posterior probabilities; should sum ≈ 1. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\section{\texttt{MissionState.msg}}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}p{2.1cm}p{2.1cm}p{2.1cm}p{2.1cm}p{2.1cm}p{2.1cm}p{3.2cm}@{}}
+\toprule
+Field & Type & Meaning &  &  &  &  \\
+\midrule
+\endfirsthead
+\toprule
+Field & Type & Meaning &  &  &  &  \\
+\midrule
+\endhead
+\texttt{header} & \texttt{std\_msgs/Header} & Snapshot stamp; \texttt{frame\_id} = \texttt{map}. &  &  &  &  \\
+\texttt{mode} & \texttt{string} & \texttt{GLOBAL\_SEARCH} \ & \texttt{TARGET\_SEARCH} \ & \texttt{HOLD} \ & \texttt{VERIFY} \ & \texttt{COMPLETE} (and related). \\
+\texttt{hunt\_phase} & \texttt{string} & Within target hunt: \texttt{INFO\_GAIN} \ & \texttt{SPIRAL}, else empty. &  &  &  \\
+\texttt{peak\_p} & \texttt{float64} & Latest swarm peak belief probability. &  &  &  &  \\
+\texttt{peak\_x}, \texttt{peak\_y} & \texttt{float64} & Latest discrete peak cell centre (m). &  &  &  &  \\
+\texttt{info\_gain\_steps} & \texttt{int32} & Number of MI replan steps taken in \texttt{INFO\_GAIN}. &  &  &  &  \\
+\texttt{confirmations} & \texttt{int32} & Verification confirmation count. &  &  &  &  \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\section{\texttt{VerifyRequest.msg}}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}llp{7.2cm}@{}}
+\toprule
+Field & Type & Meaning \\
+\midrule
+\endfirsthead
+\toprule
+Field & Type & Meaning \\
+\midrule
+\endhead
+\texttt{header} & \texttt{std\_msgs/Header} & Request stamp; \texttt{frame\_id} = \texttt{map}. \\
+\texttt{discoverer\_id} & \texttt{string} & ASV that declared the candidate (e.g. \texttt{asv1}). \\
+\texttt{verifier\_id} & \texttt{string} & Assigned verifier; empty on declare, filled by coordinator on request. \\
+\texttt{candidate\_x}, \texttt{candidate\_y} & \texttt{float64} & Candidate location (weighted centroid / estimate) (m). \\
+\texttt{candidate\_peak\_p} & \texttt{float64} & Peak probability at declaration. \\
+\texttt{discoverer\_x}, \texttt{discoverer\_y} & \texttt{float64} & Discoverer pose at declaration (for opposite-side orbit approach). \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\section{\texttt{VerifyResult.msg}}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}llp{7.2cm}@{}}
+\toprule
+Field & Type & Meaning \\
+\midrule
+\endfirsthead
+\toprule
+Field & Type & Meaning \\
+\midrule
+\endhead
+\texttt{header} & \texttt{std\_msgs/Header} & Result stamp; \texttt{frame\_id} = \texttt{map}. \\
+\texttt{success} & \texttt{bool} & True if required confirmations were collected. \\
+\texttt{verifier\_id} & \texttt{string} & ASV that performed verification. \\
+\texttt{candidate\_x}, \texttt{candidate\_y} & \texttt{float64} & Candidate under verification (m). \\
+\texttt{confirmations} & \texttt{int32} & Number of confirming readings. \\
+\texttt{final\_peak\_p} & \texttt{float64} & Swarm peak probability at finish. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+
+
+\chapter{Part II --- Gazebo ↔ ROS Bridges (\texttt{boat\_bringup})}
+\label{ch:ros-catalog}
+
+This chapter is the authoritative software reference for every message, bridge, and node in the dual-ASV stack. Each node section lists identity, parameters, subscriptions, publications, timers, QoS, internal algorithm steps, and runtime dependencies.
+
+
+Bridges are \textbf{not} Python package executables; they are \texttt{ros\_gz\_bridge} \texttt{parameter\_bridge} nodes started from \texttt{sim.launch.py}.
+
+
+\section{Bridge nodes}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lllp{5.2cm}@{}}
+\toprule
+Launch name & Executable & Config & When \\
+\midrule
+\endfirsthead
+\toprule
+Launch name & Executable & Config & When \\
+\midrule
+\endhead
+\texttt{boat\_bridge} & \texttt{ros\_gz\_bridge/parameter\_bridge} & \texttt{config/bridge.yaml} & Always with \texttt{sim.launch.py} \\
+\texttt{clock\_bridge} & \texttt{ros\_gz\_bridge/parameter\_bridge} & \texttt{config/clock\_bridge.yaml} & Only when launch arg \texttt{fast:=true} \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\textbf{Dependencies:} Gazebo Sim world running (\texttt{gz sim … water\_world.sdf}); thruster topics require \texttt{thrust\_mixer} publishing on the matching \texttt{/model/.../cmd\_thrust} names.
+
+
+\section{\texttt{bridge.yaml} topic mappings}
+
+
+\subsection{ASV1 (\texttt{simple\_boat})}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}p{2.1cm}p{2.1cm}p{2.1cm}p{2.1cm}p{3.2cm}@{}}
+\toprule
+ROS topic & GZ topic & ROS type & GZ type & Direction \\
+\midrule
+\endfirsthead
+\toprule
+ROS topic & GZ topic & ROS type & GZ type & Direction \\
+\midrule
+\endhead
+\texttt{/model/simple\_boat/joint/left\_propeller\_joint/cmd\_thrust} & same & \texttt{std\_msgs/msg/Float64} & \texttt{gz.msgs.Double} & ROS\_TO\_GZ \\
+\texttt{/model/simple\_boat/joint/right\_propeller\_joint/cmd\_thrust} & same & \texttt{std\_msgs/msg/Float64} & \texttt{gz.msgs.Double} & ROS\_TO\_GZ \\
+\texttt{/asv1/imu/data} & \texttt{/model/simple\_boat/imu} & \texttt{sensor\_msgs/msg/Imu} & \texttt{gz.msgs.IMU} & GZ\_TO\_ROS \\
+\texttt{/asv1/gps/fix} & \texttt{/model/simple\_boat/gps} & \texttt{sensor\_msgs/msg/NavSatFix} & \texttt{gz.msgs.NavSat} & GZ\_TO\_ROS \\
+\texttt{/asv1/mag/gazebo} & \texttt{/model/simple\_boat/magnetometer} & \texttt{sensor\_msgs/msg/MagneticField} & \texttt{gz.msgs.Magnetometer} & GZ\_TO\_ROS \\
+\texttt{/asv1/odom} & \texttt{/model/simple\_boat/odometry} & \texttt{nav\_msgs/msg/Odometry} & \texttt{gz.msgs.Odometry} & GZ\_TO\_ROS \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{ASV2 (\texttt{simple\_boat\_2})}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}p{2.1cm}p{2.1cm}p{2.1cm}p{2.1cm}p{3.2cm}@{}}
+\toprule
+ROS topic & GZ topic & ROS type & GZ type & Direction \\
+\midrule
+\endfirsthead
+\toprule
+ROS topic & GZ topic & ROS type & GZ type & Direction \\
+\midrule
+\endhead
+\texttt{/model/simple\_boat\_2/joint/left\_propeller\_joint/cmd\_thrust} & same & \texttt{std\_msgs/msg/Float64} & \texttt{gz.msgs.Double} & ROS\_TO\_GZ \\
+\texttt{/model/simple\_boat\_2/joint/right\_propeller\_joint/cmd\_thrust} & same & \texttt{std\_msgs/msg/Float64} & \texttt{gz.msgs.Double} & ROS\_TO\_GZ \\
+\texttt{/asv2/imu/data} & \texttt{/model/simple\_boat\_2/imu} & \texttt{sensor\_msgs/msg/Imu} & \texttt{gz.msgs.IMU} & GZ\_TO\_ROS \\
+\texttt{/asv2/gps/fix} & \texttt{/model/simple\_boat\_2/gps} & \texttt{sensor\_msgs/msg/NavSatFix} & \texttt{gz.msgs.NavSat} & GZ\_TO\_ROS \\
+\texttt{/asv2/mag/gazebo} & \texttt{/model/simple\_boat\_2/magnetometer} & \texttt{sensor\_msgs/msg/MagneticField} & \texttt{gz.msgs.Magnetometer} & GZ\_TO\_ROS \\
+\texttt{/asv2/odom} & \texttt{/model/simple\_boat\_2/odometry} & \texttt{nav\_msgs/msg/Odometry} & \texttt{gz.msgs.Odometry} & GZ\_TO\_ROS \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\section{\texttt{clock\_bridge.yaml}}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}p{2.1cm}p{2.1cm}p{2.1cm}p{2.1cm}p{3.2cm}@{}}
+\toprule
+ROS topic & GZ topic & ROS type & GZ type & Direction \\
+\midrule
+\endfirsthead
+\toprule
+ROS topic & GZ topic & ROS type & GZ type & Direction \\
+\midrule
+\endhead
+\texttt{/clock} & \texttt{/clock} & \texttt{rosgraph\_msgs/msg/Clock} & \texttt{gz.msgs.Clock} & GZ\_TO\_ROS \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\section{Related config (not bridges)}
+
+
+\texttt{record\_topics.yaml} lists bag topics for offline replay (\texttt{/asv1/pose2d}, mag chain, belief topics, etc.); it does not start a node by itself.
+
+
+
+
+\chapter{Part III --- Nodes by Package}
+\label{ch:ros-catalog}
+
+This chapter is the authoritative software reference for every message, bridge, and node in the dual-ASV stack. Each node section lists identity, parameters, subscriptions, publications, timers, QoS, internal algorithm steps, and runtime dependencies.
+
+
+
+
+\section{1. \texttt{boat\_control} --- \texttt{thrust\_mixer}}
+
+
+\subsection{1.1 Identity}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lp{10cm}@{}}
+\toprule
+Item & Value \\
+\midrule
+\endfirsthead
+\toprule
+Item & Value \\
+\midrule
+\endhead
+Package & \texttt{boat\_control} \\
+Entry point & \texttt{thrust\_mixer = boat\_control.mixer:main} \\
+Class & \texttt{ThrustMixer} \\
+File & \texttt{src/boat\_control/boat\_control/mixer.py} \\
+Core helper & \texttt{boat\_control.core.mix\_thrust} \\
+ROS node name & \texttt{thrust\_mixer} \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{1.2 Parameters}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}llp{7.2cm}@{}}
+\toprule
+Name & Code default & YAML / launch override \\
+\midrule
+\endfirsthead
+\toprule
+Name & Code default & YAML / launch override \\
+\midrule
+\endhead
+\texttt{model\_name} & \texttt{'simple\_boat'} & Launch: \texttt{simple\_boat} / \texttt{simple\_boat\_2} per ASV. \textbf{No} \texttt{boat\_bringup/config} YAML. \\
+\texttt{cmd\_vel\_topic} & \texttt{'cmd\_vel'} & Launch: \texttt{'cmd\_vel'} (relative). \\
+\texttt{thrust\_scale} & \texttt{50.0} & Launch: \texttt{50.0} \\
+\texttt{turn\_gain} & \texttt{1.0} & Launch: \texttt{1.0} \\
+\texttt{max\_thrust} & \texttt{100.0} & Launch: \texttt{100.0} \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{1.3 Subscriptions}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lllp{5.2cm}@{}}
+\toprule
+Topic & Rel/Abs & Type & Callback purpose \\
+\midrule
+\endfirsthead
+\toprule
+Topic & Rel/Abs & Type & Callback purpose \\
+\midrule
+\endhead
+\texttt{cmd\_vel} (param) & relative & \texttt{geometry\_msgs/Twist} & \texttt{on\_cmd\_vel}: convert surge \texttt{linear.x} and yaw rate \texttt{angular.z} into left/right thrust and publish immediately. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{1.4 Publishers}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lllp{5.2cm}@{}}
+\toprule
+Topic & Rel/Abs & Type & When \\
+\midrule
+\endfirsthead
+\toprule
+Topic & Rel/Abs & Type & When \\
+\midrule
+\endhead
+\texttt{/model/\{model\_name\}/joint/left\_propeller\_joint/cmd\_thrust} & \textbf{absolute} & \texttt{std\_msgs/Float64} & On every \texttt{cmd\_vel} \\
+\texttt{/model/\{model\_name\}/joint/right\_propeller\_joint/cmd\_thrust} & \textbf{absolute} & \texttt{std\_msgs/Float64} & On every \texttt{cmd\_vel} \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{1.5 Timers / QoS}
+
+
+\begin{itemize}[leftmargin=*]
+\item \textbf{Timers:} none (event-driven).
+\item \textbf{QoS:} depth 10, default (reliable, volatile).
+\end{itemize}
+
+
+\subsection{1.6 Algorithm pipeline}
+
+
+\begin{itemize}[leftmargin=*]
+\item Read \texttt{linear.x} (surge) and \texttt{angular.z} (yaw).
+\item \(L = (u - r \cdot g) s\), \(R = (u + r \cdot g) s\) with scale \(s\), turn gain \(g\).
+\item Clamp each channel to \(\pm\) \texttt{max\_thrust}.
+\item Publish left/right \texttt{Float64} thrust commands to Gazebo joints (via bridge).
+\end{itemize}
+
+
+\subsection{1.7 Dependencies}
+
+
+\begin{itemize}[leftmargin=*]
+\item \textbf{Upstream:} \texttt{los\_path\_follower} (or teleop) publishing \texttt{cmd\_vel}.
+\item \textbf{Downstream / infra:} \texttt{boat\_bridge} mapping thrust topics into Gazebo; Gazebo model spawned.
+\end{itemize}
+
+
+
+
+\section{2. \texttt{boat\_sensing} --- \texttt{mag\_driver}}
+
+
+\subsection{2.1 Identity}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lp{10cm}@{}}
+\toprule
+Item & Value \\
+\midrule
+\endfirsthead
+\toprule
+Item & Value \\
+\midrule
+\endhead
+Entry point & \texttt{mag\_driver = boat\_sensing.mag\_driver:main} \\
+Class & \texttt{MagDriver} \\
+File & \texttt{src/boat\_sensing/boat\_sensing/mag\_driver.py} \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{2.2 Parameters}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}llp{7.2cm}@{}}
+\toprule
+Name & Code default & \texttt{sensing.yaml} (\texttt{/**/mag\_driver}) \\
+\midrule
+\endfirsthead
+\toprule
+Name & Code default & \texttt{sensing.yaml} (\texttt{/**/mag\_driver}) \\
+\midrule
+\endhead
+\texttt{publish\_rate\_hz} & \texttt{20.0} & \texttt{20.0} \\
+\texttt{gazebo\_mag\_topic} & \texttt{'mag/gazebo'} & \texttt{mag/gazebo} \\
+\texttt{pose\_topic} & \texttt{'pose2d'} & \texttt{pose2d} \\
+\texttt{cmd\_vel\_topic} & \texttt{'cmd\_vel'} & \texttt{cmd\_vel} \\
+\texttt{raw\_topic} & \texttt{'mag/raw'} & \texttt{mag/raw} \\
+\texttt{frame\_id} & \texttt{'asv1/mag\_link'} & Launch overrides to \texttt{\{ns\}/mag\_link} \\
+\texttt{motor\_on\_threshold} & \texttt{1.0e-3} & \texttt{0.001} \\
+\texttt{plant\_magnetic\_target} & \texttt{True} & \texttt{true} \\
+\texttt{target\_x} & \texttt{80.0} & \textbf{\texttt{55.0}} \\
+\texttt{target\_y} & \texttt{-40.0} & \textbf{\texttt{-35.0}} \\
+\texttt{dipole\_strength\_nt} & \texttt{1.5e12} & \textbf{\texttt{4.0e5}} \\
+\texttt{dipole\_soft\_m} & \texttt{1.0} & \textbf{\texttt{20.0}} \\
+\texttt{synthetic\_background\_nt} & \texttt{4.5e8} & \textbf{\texttt{45000.0}} \\
+\texttt{synthetic\_noise\_nt} & \texttt{5.0e4} & \textbf{\texttt{3.0}} \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{2.3 Subscriptions}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}p{2.1cm}p{2.1cm}p{2.1cm}p{2.1cm}p{2.1cm}p{2.1cm}p{2.1cm}p{3.2cm}@{}}
+\toprule
+Topic & Rel/Abs & Type & Callback purpose &  &  &  &  \\
+\midrule
+\endfirsthead
+\toprule
+Topic & Rel/Abs & Type & Callback purpose &  &  &  &  \\
+\midrule
+\endhead
+\texttt{mag/gazebo} & relative & \texttt{sensor\_msgs/MagneticField} & Cache latest Gazebo magnetometer (used when planting disabled). &  &  &  &  \\
+\texttt{pose2d} & relative & \texttt{geometry\_msgs/Pose2D} & Cache pose for stamping / synthetic dipole. &  &  &  &  \\
+\texttt{cmd\_vel} & relative & \texttt{geometry\_msgs/Twist} & Set \texttt{motor\_on} if \ & surge\ & or \ & yaw\ & exceeds threshold. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{2.4 Publishers}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lllp{5.2cm}@{}}
+\toprule
+Topic & Rel/Abs & Type & When \\
+\midrule
+\endfirsthead
+\toprule
+Topic & Rel/Abs & Type & When \\
+\midrule
+\endhead
+\texttt{mag/raw} & relative & \texttt{boat\_msgs/MagReading} & Timer at \texttt{publish\_rate\_hz} (skip if planted mode and no pose, or non-planted and no mag). \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{2.5 Timers / QoS}
+
+
+\begin{itemize}[leftmargin=*]
+\item \textbf{Timer:} \texttt{1/publish\_rate\_hz} (default \textbf{20 Hz}) → \texttt{on\_timer}.
+\item \textbf{QoS:} mag sub depth 50; others 10; default QoS.
+\end{itemize}
+
+
+\subsection{2.6 Algorithm pipeline}
+
+
+\begin{itemize}[leftmargin=*]
+\item If \texttt{plant\_magnetic\_target}: require pose; compute \(A/(r^3+s^3)\) dipole anomaly; set \(b\_z =\) background + anomaly + Gaussian noise; \(b\_x=b\_y=0\).
+\item Else: convert Gazebo Tesla → nT; attach pose if available (else NaN).
+\item Fill \texttt{MagReading} (axes, scalar, motor\_on, pose, heading); publish.
+\end{itemize}
+
+
+\subsection{2.7 Dependencies}
+
+
+\begin{itemize}[leftmargin=*]
+\item \textbf{Required for planted mode:} \texttt{gazebo\_pose2d} (\texttt{pose2d}).
+\item \textbf{Optional:} Gazebo mag via bridge (\texttt{mag/gazebo}) when planting off; \texttt{cmd\_vel} for \texttt{motor\_on}.
+\item \textbf{Consumers:} \texttt{mag\_filter}.
+\end{itemize}
+
+
+
+
+\section{3. \texttt{boat\_sensing} --- \texttt{mag\_filter}}
+
+
+\subsection{3.1 Identity}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lp{10cm}@{}}
+\toprule
+Item & Value \\
+\midrule
+\endfirsthead
+\toprule
+Item & Value \\
+\midrule
+\endhead
+Entry point & \texttt{mag\_filter = boat\_sensing.mag\_filter:main} \\
+Class & \texttt{MagFilter} \\
+File & \texttt{src/boat\_sensing/boat\_sensing/mag\_filter.py} \\
+Core & \texttt{MagnetometerFilterChain} in \texttt{filter\_core.py} \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{3.2 Parameters}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}llp{7.2cm}@{}}
+\toprule
+Name & Code default & \texttt{sensing.yaml} (\texttt{/**/mag\_filter}) \\
+\midrule
+\endfirsthead
+\toprule
+Name & Code default & \texttt{sensing.yaml} (\texttt{/**/mag\_filter}) \\
+\midrule
+\endhead
+\texttt{raw\_topic} & \texttt{'mag/raw'} & same \\
+\texttt{filtered\_topic} & \texttt{'mag/filtered'} & same \\
+\texttt{status\_topic} & \texttt{'mag/filter\_status'} & same \\
+\texttt{lowpass\_window} & \texttt{5} & \texttt{5} \\
+\texttt{spike\_history} & \texttt{20} & \texttt{20} \\
+\texttt{spike\_n\_sigma} & \texttt{3.0} & \textbf{\texttt{10.0}} \\
+\texttt{min\_std\_nt} & \texttt{1.0} & \texttt{1.0} \\
+\texttt{status\_rate\_hz} & \texttt{1.0} & \texttt{1.0} \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{3.3 Subscriptions}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lllp{5.2cm}@{}}
+\toprule
+Topic & Rel/Abs & Type & Callback purpose \\
+\midrule
+\endfirsthead
+\toprule
+Topic & Rel/Abs & Type & Callback purpose \\
+\midrule
+\endhead
+\texttt{mag/raw} & relative & \texttt{boat\_msgs/MagReading} & Spike-reject then low-pass each axis/scalar; republish cleaned reading with pose fields copied. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{3.4 Publishers}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lllp{5.2cm}@{}}
+\toprule
+Topic & Rel/Abs & Type & When \\
+\midrule
+\endfirsthead
+\toprule
+Topic & Rel/Abs & Type & When \\
+\midrule
+\endhead
+\texttt{mag/filtered} & relative & \texttt{boat\_msgs/MagReading} & On every accepted/filtered raw sample \\
+\texttt{mag/filter\_status} & relative & \texttt{diagnostic\_msgs/DiagnosticStatus} & Timer at \texttt{status\_rate\_hz} \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{3.5 Timers / QoS}
+
+
+\begin{itemize}[leftmargin=*]
+\item \textbf{Timer:} status at \textbf{1 Hz} (default).
+\item \textbf{QoS:} raw sub depth 50; pubs depth 10; default.
+\end{itemize}
+
+
+\subsection{3.6 Algorithm pipeline}
+
+
+\begin{itemize}[leftmargin=*]
+\item Per axis + scalar: spike gate vs rolling mean ± \texttt{n\_sigma}·std (min std floor); after 5 consecutive rejects, accept step change.
+\item Moving-average low-pass of accepted (or held) value.
+\item Copy pose / \texttt{motor\_on} / header; publish; status reports counts and rejects.
+\end{itemize}
+
+
+\subsection{3.7 Dependencies}
+
+
+\begin{itemize}[leftmargin=*]
+\item \textbf{Upstream:} \texttt{mag\_driver}.
+\item \textbf{Downstream:} \texttt{calibration\_node}.
+\end{itemize}
+
+
+
+
+\section{4. \texttt{boat\_sensing} --- \texttt{calibration\_node}}
+
+
+\subsection{4.1 Identity}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lp{10cm}@{}}
+\toprule
+Item & Value \\
+\midrule
+\endfirsthead
+\toprule
+Item & Value \\
+\midrule
+\endhead
+Entry point & \texttt{calibration\_node = boat\_sensing.calibration\_node:main} \\
+Class & \texttt{CalibrationNode} \\
+File & \texttt{src/boat\_sensing/boat\_sensing/calibration\_node.py} \\
+Core & \texttt{MagneticCalibrator}, \texttt{BaselineMap}, \texttt{TemporalHighPass} \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{4.2 Parameters}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}llp{7.2cm}@{}}
+\toprule
+Name & Code default & \texttt{sensing.yaml} (\texttt{/**/calibration\_node}) \\
+\midrule
+\endfirsthead
+\toprule
+Name & Code default & \texttt{sensing.yaml} (\texttt{/**/calibration\_node}) \\
+\midrule
+\endhead
+\texttt{filtered\_topic} & \texttt{'mag/filtered'} & same \\
+\texttt{anomaly\_topic} & \texttt{'mag/anomaly'} & same \\
+\texttt{status\_topic} & \texttt{'calibration/status'} & same \\
+\texttt{area\_size\_m} & \texttt{300.0} & \texttt{300.0} \\
+\texttt{origin\_x} & \texttt{-150.0} & \texttt{-150.0} \\
+\texttt{origin\_y} & \texttt{-150.0} & \texttt{-150.0} \\
+\texttt{cell\_size\_m} & \texttt{20.0} & \textbf{\texttt{10.0}} \\
+\texttt{num\_heading\_bins} & \texttt{8} & \texttt{8} \\
+\texttt{min\_cell\_samples} & \texttt{1} & \texttt{1} \\
+\texttt{reject\_residual\_nt} & \texttt{5.0e7} & \textbf{\texttt{35.0}} \\
+\texttt{temporal\_window} & \texttt{12} & \texttt{12} \\
+\texttt{noise\_floor\_nt} & \texttt{0.0} & \texttt{0.0} \\
+\texttt{ready\_coverage\_percent} & \texttt{5.0} & \texttt{5.0} \\
+\texttt{ready\_min\_cells} & \texttt{8} & \texttt{8} \\
+\texttt{freeze\_baseline\_when\_ready} & \texttt{True} & \texttt{true} \\
+\texttt{status\_rate\_hz} & \texttt{1.0} & \texttt{1.0} \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{4.3 Subscriptions}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lllp{5.2cm}@{}}
+\toprule
+Topic & Rel/Abs & Type & Callback purpose \\
+\midrule
+\endfirsthead
+\toprule
+Topic & Rel/Abs & Type & Callback purpose \\
+\midrule
+\endhead
+\texttt{mag/filtered} & relative & \texttt{boat\_msgs/MagReading} & Drop NaN pose; run calibrator; publish \texttt{MagAnomaly}. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{4.4 Publishers}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lllp{5.2cm}@{}}
+\toprule
+Topic & Rel/Abs & Type & When \\
+\midrule
+\endfirsthead
+\toprule
+Topic & Rel/Abs & Type & When \\
+\midrule
+\endhead
+\texttt{mag/anomaly} & relative & \texttt{boat\_msgs/MagAnomaly} & Per valid filtered sample \\
+\texttt{calibration/status} & relative & \texttt{boat\_msgs/CalibrationStatus} & Timer at \texttt{status\_rate\_hz} \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{4.5 Timers / QoS}
+
+
+\begin{itemize}[leftmargin=*]
+\item \textbf{Timer:} status \textbf{1 Hz}.
+\item \textbf{QoS:} filtered sub depth 50; default elsewhere.
+\end{itemize}
+
+
+\subsection{4.6 Algorithm pipeline}
+
+
+\begin{itemize}[leftmargin=*]
+\item Update (or freeze) spatial baseline map keyed by cell × heading bin; reject learning when residual too large (near dipole).
+\item Estimate baseline (own bin → cell mean → neighbour median → global mean).
+\item Spatial anomaly = \|raw − baseline\|; temporal high-pass / track boost → \texttt{cleaned\_anomaly\_nt}.
+\item Phase → \texttt{READY} when coverage or cell count thresholds met; optionally freeze further baseline learning.
+\item Publish anomaly + periodic status.
+\end{itemize}
+
+
+\subsection{4.7 Dependencies}
+
+
+\begin{itemize}[leftmargin=*]
+\item \textbf{Upstream:} \texttt{mag\_filter} (and thus \texttt{mag\_driver} + pose).
+\item \textbf{Downstream:} \texttt{bayes\_fusion}, \texttt{mission\_manager}, \texttt{trajectory\_plotter}.
+\end{itemize}
+
+
+
+
+\section{5. \texttt{boat\_mapping} --- \texttt{bayes\_fusion}}
+
+
+\subsection{5.1 Identity}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lp{10cm}@{}}
+\toprule
+Item & Value \\
+\midrule
+\endfirsthead
+\toprule
+Item & Value \\
+\midrule
+\endhead
+Entry point & \texttt{bayes\_fusion = boat\_mapping.bayes\_fusion:main} \\
+Class & \texttt{BayesFusionNode} \\
+File & \texttt{src/boat\_mapping/boat\_mapping/bayes\_fusion.py} \\
+Core & \texttt{BeliefMap} (\texttt{bayes\_core.py}), \texttt{DipoleFitter} (\texttt{dipole\_fit.py}) \\
+Namespace & typically \textbf{root} (not under \texttt{/asv*}) \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{5.2 Parameters}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}llp{7.2cm}@{}}
+\toprule
+Name & Code default & \texttt{mapping.yaml} (\texttt{bayes\_fusion}) \\
+\midrule
+\endfirsthead
+\toprule
+Name & Code default & \texttt{mapping.yaml} (\texttt{bayes\_fusion}) \\
+\midrule
+\endhead
+\texttt{anomaly\_topics} & \texttt{['/asv1/mag/anomaly']} & \textbf{\texttt{['/asv1/mag/anomaly','/asv2/mag/anomaly']}} \\
+\texttt{map\_topic} & \texttt{/swarm/belief/map} & same \\
+\texttt{peak\_topic} & \texttt{/swarm/belief/peak} & same \\
+\texttt{peak\_probability\_topic} & \texttt{/swarm/belief/peak\_probability} & same \\
+\texttt{centroid\_topic} & \texttt{/swarm/belief/centroid} & same \\
+\texttt{centroid\_mass\_topic} & \texttt{/swarm/belief/centroid\_mass} & same \\
+\texttt{centroid\_spread\_topic} & \texttt{/swarm/belief/centroid\_spread} & same \\
+\texttt{fix\_topic} & \texttt{/swarm/belief/fix} & same \\
+\texttt{fix\_rms\_topic} & \texttt{/swarm/belief/fix\_rms} & same \\
+\texttt{fix\_samples\_topic} & \texttt{/swarm/belief/fix\_samples} & same \\
+\texttt{publish\_rate\_hz} & \texttt{2.0} & \texttt{2.0} \\
+\texttt{area\_size\_m} & \texttt{300.0} & \texttt{300.0} \\
+\texttt{origin\_x} / \texttt{origin\_y} & \texttt{-150.0} & same \\
+\texttt{cell\_size\_m} & \texttt{20.0} & \textbf{\texttt{10.0}} \\
+\texttt{p\_bg} & \texttt{0.05} & \texttt{0.05} \\
+\texttt{p\_max} & \texttt{0.95} & \texttt{0.95} \\
+\texttt{d\_half} & \texttt{30.0} & \texttt{30.0} \\
+\texttt{hit\_threshold\_nt} & \texttt{5.0e7} & \textbf{\texttt{15.0}} \\
+\texttt{miss\_threshold\_nt} & \texttt{1.0e6} & \textbf{\texttt{5.0}} \\
+\texttt{hit\_only} & \texttt{True} & \texttt{true} \\
+\texttt{centroid\_threshold\_frac} & \texttt{0.5} & \texttt{0.5} \\
+\texttt{dipole\_fit\_enable} & \texttt{True} & \texttt{true} \\
+\texttt{dipole\_soft\_m} & \texttt{20.0} & \texttt{20.0} \\
+\texttt{dipole\_fit\_min\_anomaly\_nt} & \texttt{10.0} & \texttt{10.0} \\
+\texttt{dipole\_fit\_min\_samples} & \texttt{12} & \texttt{12} \\
+\texttt{dipole\_fit\_max\_samples} & \texttt{400} & \texttt{400} \\
+\texttt{dipole\_fit\_guess\_strength\_nt} & \texttt{4.0e5} & \texttt{4.0e5} \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{5.3 Subscriptions}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lllp{5.2cm}@{}}
+\toprule
+Topic & Rel/Abs & Type & Callback purpose \\
+\midrule
+\endfirsthead
+\toprule
+Topic & Rel/Abs & Type & Callback purpose \\
+\midrule
+\endhead
+each of \texttt{anomaly\_topics} & absolute list & \texttt{boat\_msgs/MagAnomaly} & Bayesian HIT/MISS update; buffer strong samples for dipole LS fit; log HITs. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{5.4 Publishers}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lllp{5.2cm}@{}}
+\toprule
+Topic & Rel/Abs & Type & When \\
+\midrule
+\endfirsthead
+\toprule
+Topic & Rel/Abs & Type & When \\
+\midrule
+\endhead
+\texttt{/swarm/belief/map} & absolute & \texttt{boat\_msgs/BeliefGrid} & Timer \texttt{publish\_rate\_hz} \\
+\texttt{/swarm/belief/peak} & absolute & \texttt{geometry\_msgs/PoseStamped} & same \\
+\texttt{/swarm/belief/peak\_probability} & absolute & \texttt{std\_msgs/Float64} & same \\
+\texttt{/swarm/belief/centroid} & absolute & \texttt{geometry\_msgs/PoseStamped} & same \\
+\texttt{/swarm/belief/centroid\_mass} & absolute & \texttt{std\_msgs/Float64} & same \\
+\texttt{/swarm/belief/centroid\_spread} & absolute & \texttt{std\_msgs/Float64} & same \\
+\texttt{/swarm/belief/fix} & absolute & \texttt{geometry\_msgs/PoseStamped} & Timer, only if last fit succeeded \\
+\texttt{/swarm/belief/fix\_rms} & absolute & \texttt{std\_msgs/Float64} & with fix \\
+\texttt{/swarm/belief/fix\_samples} & absolute & \texttt{std\_msgs/Float64} & with fix (sample count as float) \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{5.5 Timers / QoS}
+
+
+\begin{itemize}[leftmargin=*]
+\item \textbf{Timer:} belief publish at \textbf{2 Hz} (default/yaml).
+\item \textbf{QoS:} anomaly sub depth 50; pubs depth 10; \textbf{no} transient\_local.
+\end{itemize}
+
+
+\subsection{5.6 Algorithm pipeline}
+
+
+\begin{itemize}[leftmargin=*]
+\item Skip uncalibrated samples (ABSTAIN).
+\item Classify anomaly: HIT if ≥ hit threshold; MISS if ≤ miss (ignored when \texttt{hit\_only}); else ABSTAIN.
+\item For HIT: multiply each cell belief by \(P\_{\mathrm{det}}(d)\) with soft \(1/d^3\) detection model; renormalize.
+\item Maintain weighted centroid of cells with belief ≥ \texttt{centroid\_threshold\_frac} × peak.
+\item Dipole fitter: buffer strong anomalies; LM fit \(A/(r^3+s^3)\) seeded from centroid → continuous fix.
+\item Periodically publish grid, peak, centroid, and optional fix.
+\end{itemize}
+
+
+\subsection{5.7 Dependencies}
+
+
+\begin{itemize}[leftmargin=*]
+\item \textbf{Upstream:} one or more \texttt{calibration\_node} anomaly streams.
+\item \textbf{Downstream:} \texttt{mission\_manager}, \texttt{trajectory\_plotter}.
+\item Launch condition: \texttt{mapping:=true} in \texttt{sim.launch.py}.
+\end{itemize}
+
+
+
+
+\section{6. \texttt{boat\_mission} --- \texttt{mission\_manager}}
+
+
+\subsection{6.1 Identity}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lp{10cm}@{}}
+\toprule
+Item & Value \\
+\midrule
+\endfirsthead
+\toprule
+Item & Value \\
+\midrule
+\endhead
+Entry point & \texttt{mission\_manager = boat\_mission.mission\_manager:main} \\
+Class & \texttt{MissionManager} \\
+File & \texttt{src/boat\_mission/boat\_mission/mission\_manager.py} \\
+Helpers & \texttt{InfoGainPlanner}, path generators, \texttt{VerificationTracker} \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{6.2 Parameters}
+
+
+Topic / ID parameters (code defaults; yaml under \texttt{/**/mission\_manager} matches unless noted):
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}llp{7.2cm}@{}}
+\toprule
+Name & Code default & YAML notes \\
+\midrule
+\endfirsthead
+\toprule
+Name & Code default & YAML notes \\
+\midrule
+\endhead
+\texttt{asv\_id} & \texttt{''} (→ namespace or \texttt{asv1}) & \texttt{''} \\
+\texttt{pose\_topic} & \texttt{pose2d} & same \\
+\texttt{plan\_topic} & \texttt{plan} & same \\
+\texttt{state\_topic} & \texttt{mission/state} & same \\
+\texttt{mode\_topic} & \texttt{mission/mode} & same \\
+\texttt{info\_gain\_topic} & \texttt{mission/info\_gain} & same \\
+\texttt{anomaly\_topic} & \texttt{mag/anomaly} & same \\
+\texttt{calibration\_status\_topic} & \texttt{calibration/status} & same \\
+\texttt{peak\_topic} & \texttt{/swarm/belief/peak} & same \\
+\texttt{peak\_probability\_topic} & \texttt{/swarm/belief/peak\_probability} & same \\
+\texttt{centroid\_topic} & \texttt{/swarm/belief/centroid} & same \\
+\texttt{belief\_map\_topic} & \texttt{/swarm/belief/map} & same \\
+\texttt{declare\_topic} & \texttt{/swarm/verify/declare} & same \\
+\texttt{verify\_request\_topic} & \texttt{/swarm/verify/request} & same \\
+\texttt{verify\_result\_topic} & \texttt{/swarm/verify/result} & same \\
+\texttt{halt\_topic} & \texttt{/swarm/mission/halt} & same \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+Behaviour / geometry (highlighting yaml overrides):
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}llp{7.2cm}@{}}
+\toprule
+Name & Code default & YAML \\
+\midrule
+\endfirsthead
+\toprule
+Name & Code default & YAML \\
+\midrule
+\endhead
+\texttt{min\_x}…\texttt{max\_y} & ±120 & same \\
+\texttt{lawnmower\_spacing} & \texttt{40.0} & \textbf{\texttt{20.0}} \\
+\texttt{lawnmower\_asv\_index} & \texttt{0} & launch sets per ASV \\
+\texttt{lawnmower\_num\_asvs} & \texttt{1} & launch sets to \texttt{num\_asvs} \\
+\texttt{lawnmower\_partition} & \texttt{'voronoi'} & \texttt{voronoi} \\
+\texttt{region\_seeds} & \texttt{[-110,-110,110,-110]} & same (cleared if \texttt{num\_asvs≤1}) \\
+\texttt{control\_rate\_hz} & \texttt{2.0} & \texttt{2.0} \\
+\texttt{p\_enter\_target\_search} & \texttt{0.25} & same \\
+\texttt{consecutive\_high\_p\_required} & \texttt{4} & same \\
+\texttt{peak\_near\_asv\_radius\_m} & \texttt{150.0} & same \\
+\texttt{min\_seconds\_before\_switch} & \texttt{20.0} & same \\
+\texttt{require\_calibration\_ready} & \texttt{True} & same \\
+\texttt{force\_target\_search} / \texttt{force\_spiral\_complete} / \texttt{force\_verify} & \texttt{False} & same \\
+\texttt{info\_gain\_*} & see code & yaml mirrors \\
+\texttt{spiral\_*} & see code & yaml mirrors \\
+\texttt{self\_verify} & \texttt{True} & launch: \texttt{True} if 1 ASV, \texttt{False} if 2 \\
+\texttt{verify\_orbit\_radius\_m} & \texttt{20.0} & same \\
+\texttt{verify\_orbit\_points} & \texttt{12} & same \\
+\texttt{verify\_confirmations\_required} & \texttt{4} & same \\
+\texttt{verify\_arrival\_radius\_m} & \texttt{30.0} & same \\
+\texttt{verify\_peak\_tolerance\_m} & \texttt{50.0} & same \\
+\texttt{verify\_confirmation\_threshold\_nt} & \texttt{5.0e7} & \textbf{\texttt{15.0}} \\
+\texttt{verify\_min\_peak\_probability} & \texttt{0.30} & same \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{6.3 Subscriptions}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lllp{5.2cm}@{}}
+\toprule
+Topic & Rel/Abs & Type & Callback purpose \\
+\midrule
+\endfirsthead
+\toprule
+Topic & Rel/Abs & Type & Callback purpose \\
+\midrule
+\endhead
+\texttt{pose2d} & relative & \texttt{Pose2D} & Own pose for planning / distance checks. \\
+\texttt{/swarm/belief/peak} & absolute & \texttt{PoseStamped} & Discrete peak cell location. \\
+\texttt{/swarm/belief/peak\_probability} & absolute & \texttt{Float64} & Peak probability for mode switch / verify. \\
+\texttt{/swarm/belief/centroid} & absolute & \texttt{PoseStamped} & Preferred target estimate (else peak). \\
+\texttt{/swarm/belief/map} & absolute & \texttt{BeliefGrid} & Feed MI planner belief. \\
+\texttt{mag/anomaly} & relative & \texttt{MagAnomaly} & Latest anomaly; during VERIFY, register confirmations. \\
+\texttt{calibration/status} & relative & \texttt{CalibrationStatus} & Gate GLOBAL→TARGET on \texttt{READY}. \\
+\texttt{/swarm/verify/request} & absolute & \texttt{VerifyRequest} & If addressed to this ASV, start VERIFY orbit. \\
+\texttt{/swarm/mission/halt} & absolute & \texttt{Bool} & On true, enter COMPLETE. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{6.4 Publishers}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lllp{5.2cm}@{}}
+\toprule
+Topic & Rel/Abs & Type & When \\
+\midrule
+\endfirsthead
+\toprule
+Topic & Rel/Abs & Type & When \\
+\midrule
+\endhead
+\texttt{plan} & relative & \texttt{nav\_msgs/Path} & Lawnmower / MI waypoint / spiral / orbit / hold; \textbf{TRANSIENT\_LOCAL} \\
+\texttt{mission/state} & relative & \texttt{MissionState} & Every control tick \\
+\texttt{mission/mode} & relative & \texttt{std\_msgs/String} & Every control tick \\
+\texttt{mission/info\_gain} & relative & \texttt{Float64} & Every control tick (last MI gain) \\
+\texttt{/swarm/verify/declare} & absolute & \texttt{VerifyRequest} & Once after spiral → HOLD \\
+\texttt{/swarm/verify/result} & absolute & \texttt{VerifyResult} & End of VERIFY; \textbf{TRANSIENT\_LOCAL} \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{6.5 Timers / QoS}
+
+
+\begin{itemize}[leftmargin=*]
+\item \textbf{Timer:} \texttt{control\_rate\_hz} → \textbf{2 Hz} state machine.
+\item \textbf{QoS:} \texttt{plan} and \texttt{verify\_result}: Reliable + \textbf{TRANSIENT\_LOCAL}, depth 1. Others depth 10/50 default.
+\end{itemize}
+
+
+\subsection{6.6 Algorithm pipeline}
+
+
+\begin{itemize}[leftmargin=*]
+\item \textbf{GLOBAL\_SEARCH:} publish partitioned lawnmower (voronoi regions or interleaved lanes); wait for cal ready, time, and consecutive high peak near ASV → TARGET\_SEARCH.
+\item \textbf{TARGET\_SEARCH / INFO\_GAIN:} mutual-information waypoint selection on belief grid; replan every \texttt{info\_gain\_replan\_period\_s}; exit on max steps / low MI / near peak / confidence.
+\item \textbf{SPIRAL:} expanding spiral about centroid/peak; complete on duration + peak\_p + proximity (or force); → HOLD + declare candidate.
+\item \textbf{HOLD:} wait for coordinator assignment unless \texttt{self\_verify} starts VERIFY immediately.
+\item \textbf{VERIFY:} opposite-side orbit; count confirming anomalies (at site, peak aligned, strong, confident); publish result → COMPLETE.
+\item \textbf{COMPLETE / halt:} hold-in-place plan.
+\end{itemize}
+
+
+\subsection{6.7 Dependencies}
+
+
+\begin{itemize}[leftmargin=*]
+\item \texttt{gazebo\_pose2d}, \texttt{los\_path\_follower} (consumes \texttt{plan}), sensing chain + \texttt{bayes\_fusion}, optionally \texttt{verify\_coordinator}.
+\item Launch: \texttt{mission:=true} and \texttt{autonomy:=true} for LOS with \texttt{use\_builtin\_path:=false}.
+\end{itemize}
+
+
+
+
+\section{7. \texttt{boat\_mission} --- \texttt{verify\_coordinator}}
+
+
+\subsection{7.1 Identity}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lp{10cm}@{}}
+\toprule
+Item & Value \\
+\midrule
+\endfirsthead
+\toprule
+Item & Value \\
+\midrule
+\endhead
+Entry point & \texttt{verify\_coordinator = boat\_mission.verify\_coordinator:main} \\
+Class & \texttt{VerifyCoordinator} \\
+File & \texttt{src/boat\_mission/boat\_mission/verify\_coordinator.py} \\
+Namespace & root (launched once, typically with ASV1 stack) \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{7.2 Parameters}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}llp{7.2cm}@{}}
+\toprule
+Name & Code default & \texttt{mission.yaml} (\texttt{verify\_coordinator}) \\
+\midrule
+\endfirsthead
+\toprule
+Name & Code default & \texttt{mission.yaml} (\texttt{verify\_coordinator}) \\
+\midrule
+\endhead
+\texttt{declare\_topic} & \texttt{/swarm/verify/declare} & same \\
+\texttt{request\_topic} & \texttt{/swarm/verify/request} & same \\
+\texttt{result\_topic} & \texttt{/swarm/verify/result} & same \\
+\texttt{complete\_topic} & \texttt{/swarm/mission/complete} & same \\
+\texttt{halt\_topic} & \texttt{/swarm/mission/halt} & same \\
+\texttt{known\_asvs} & \texttt{['asv1']} & \textbf{\texttt{['asv1','asv2']}} \\
+\texttt{prefer\_other\_verifier} & \texttt{True} & \texttt{true} \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{7.3 Subscriptions}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lllp{5.2cm}@{}}
+\toprule
+Topic & Rel/Abs & Type & Callback purpose \\
+\midrule
+\endfirsthead
+\toprule
+Topic & Rel/Abs & Type & Callback purpose \\
+\midrule
+\endhead
+\texttt{/swarm/verify/declare} & absolute & \texttt{VerifyRequest} & Pick verifier (prefer other ASV); publish assigned request. \\
+\texttt{/swarm/verify/result} & absolute & \texttt{VerifyResult} & On success: latch complete+halt; on failure: clear active request. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{7.4 Publishers}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lllp{5.2cm}@{}}
+\toprule
+Topic & Rel/Abs & Type & When \\
+\midrule
+\endfirsthead
+\toprule
+Topic & Rel/Abs & Type & When \\
+\midrule
+\endhead
+\texttt{/swarm/verify/request} & absolute & \texttt{VerifyRequest} & On accept declare \\
+\texttt{/swarm/mission/complete} & absolute & \texttt{Bool} & Success; \textbf{TRANSIENT\_LOCAL} \\
+\texttt{/swarm/mission/halt} & absolute & \texttt{Bool} & Success; \textbf{TRANSIENT\_LOCAL} \\
+\texttt{/swarm/mission/status} & absolute (\textbf{hardcoded}) & \texttt{String} & Assignment / complete strings; \textbf{TRANSIENT\_LOCAL} \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{7.5 Timers / QoS}
+
+
+\begin{itemize}[leftmargin=*]
+\item \textbf{Timers:} none.
+\item \textbf{QoS:} complete / halt / status: Reliable + \textbf{TRANSIENT\_LOCAL}, depth 1. Request/declare: depth 10 default.
+\end{itemize}
+
+
+\subsection{7.6 Algorithm pipeline}
+
+
+\begin{itemize}[leftmargin=*]
+\item Ignore declares while busy or mission already complete.
+\item Choose verifier ≠ discoverer if possible from \texttt{known\_asvs}; else self.
+\item Forward candidate + discoverer pose as \texttt{VerifyRequest}.
+\item On successful \texttt{VerifyResult}: publish \texttt{complete=true}, \texttt{halt=true}, status string.
+\end{itemize}
+
+
+\subsection{7.7 Dependencies}
+
+
+\begin{itemize}[leftmargin=*]
+\item At least one \texttt{mission\_manager} publishing declares / results.
+\item Peer \texttt{mission\_manager} instances listening for requests / halt.
+\end{itemize}
+
+
+
+
+\section{8. \texttt{boat\_mission} --- \texttt{spiral\_demo}}
+
+
+\subsection{8.1 Identity}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lp{10cm}@{}}
+\toprule
+Item & Value \\
+\midrule
+\endfirsthead
+\toprule
+Item & Value \\
+\midrule
+\endhead
+Entry point & \texttt{spiral\_demo = boat\_mission.spiral\_demo:main} \\
+Class & \texttt{SpiralDemo} \\
+File & \texttt{src/boat\_mission/boat\_mission/spiral\_demo.py} \\
+Launch & \texttt{spiral\_demo.launch.py} (not full mission) \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{8.2 Parameters}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}llp{7.2cm}@{}}
+\toprule
+Name & Code default & Launch override \\
+\midrule
+\endfirsthead
+\toprule
+Name & Code default & Launch override \\
+\midrule
+\endhead
+\texttt{pose\_topic} & \texttt{pose2d} & --- \\
+\texttt{plan\_topic} & \texttt{plan} & --- \\
+\texttt{center\_x} / \texttt{center\_y} & \texttt{30.0} / \texttt{20.0} & launch args (defaults −30 / −40) \\
+\texttt{arrival\_radius\_m} & \texttt{8.0} & --- \\
+\texttt{spiral\_ring\_spacing\_m} & \texttt{15.0} & launch \\
+\texttt{spiral\_max\_radius\_m} & \texttt{80.0} & launch (e.g. 45) \\
+\texttt{spiral\_step\_spacing\_m} & \texttt{10.0} & launch \\
+\texttt{min\_x}…\texttt{max\_y} & ±120 & --- \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\textbf{No} entry in \texttt{mission.yaml} for this node.
+
+
+\subsection{8.3 Subscriptions / publishers / timers}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lp{10cm}@{}}
+\toprule
+ &  \\
+\midrule
+\endfirsthead
+\toprule
+ &  \\
+\midrule
+\endhead
+Sub & relative \texttt{pose2d} (\texttt{Pose2D}) --- track arrival at center \\
+Pub & relative \texttt{plan} (\texttt{Path}), \textbf{TRANSIENT\_LOCAL} --- transit then production spiral \\
+Timer & \textbf{2 Hz} (\texttt{0.5} s) phase machine \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{8.4 Algorithm pipeline}
+
+
+\begin{itemize}[leftmargin=*]
+\item Wait for pose → publish transit path to \texttt{(center\_x, center\_y)}.
+\item When within \texttt{arrival\_radius\_m}, publish same expanding spiral as mission manager.
+\item Stay in SPIRAL phase (no further replans).
+\end{itemize}
+
+
+\subsection{8.5 Dependencies}
+
+
+\begin{itemize}[leftmargin=*]
+\item \texttt{gazebo\_pose2d}, \texttt{los\_path\_follower} with \texttt{use\_builtin\_path:=false}; Gazebo + thruster chain. Sensing/mapping/mission usually off in demo launch.
+\end{itemize}
+
+
+
+
+\section{9. \texttt{boat\_navigation} --- \texttt{gazebo\_pose2d}}
+
+
+\subsection{9.1 Identity}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lp{10cm}@{}}
+\toprule
+Item & Value \\
+\midrule
+\endfirsthead
+\toprule
+Item & Value \\
+\midrule
+\endhead
+Entry point & \texttt{gazebo\_pose2d = boat\_navigation.gazebo\_pose2d:main} \\
+Class & \texttt{GazeboPose2D} \\
+File & \texttt{src/boat\_navigation/boat\_navigation/gazebo\_pose2d.py} \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{9.2 Parameters}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}llp{7.2cm}@{}}
+\toprule
+Name & Code default & Launch \\
+\midrule
+\endfirsthead
+\toprule
+Name & Code default & Launch \\
+\midrule
+\endhead
+\texttt{model\_name} & \texttt{'simple\_boat'} & \texttt{simple\_boat} / \texttt{simple\_boat\_2} \\
+\texttt{world\_name} & \texttt{'niot\_world'} & \texttt{'niot\_world'} \\
+\texttt{pose\_topic} & \texttt{'pose2d'} & \texttt{'pose2d'} \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\textbf{No} navigation.yaml entry for this node.
+
+
+\subsection{9.3 I/O}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}llp{7.2cm}@{}}
+\toprule
+Kind & Topic & Notes \\
+\midrule
+\endfirsthead
+\toprule
+Kind & Topic & Notes \\
+\midrule
+\endhead
+GZ sub & \texttt{/world/\{world\_name\}/dynamic\_pose/info} & Gazebo Transport \texttt{Pose\_V} (not ROS) \\
+ROS pub & relative \texttt{pose2d} & \texttt{geometry\_msgs/Pose2D} on each matching model pose \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{9.4 Timers / QoS}
+
+
+\begin{itemize}[leftmargin=*]
+\item Event-driven from Gazebo callback; ROS pub depth 10 default.
+\end{itemize}
+
+
+\subsection{9.5 Algorithm pipeline}
+
+
+\begin{itemize}[leftmargin=*]
+\item Subscribe Gazebo dynamic poses; find pose named \texttt{model\_name}.
+\item Extract \(x,y\); yaw from quaternion; publish \texttt{Pose2D}.
+\end{itemize}
+
+
+\subsection{9.6 Dependencies}
+
+
+\begin{itemize}[leftmargin=*]
+\item Gazebo world \texttt{niot\_world} running with the model present. \textbf{Does not} use \texttt{ros\_gz\_bridge} for pose (direct gz transport).
+\end{itemize}
+
+
+
+
+\section{10. \texttt{boat\_navigation} --- \texttt{los\_path\_follower}}
+
+
+\subsection{10.1 Identity}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lp{10cm}@{}}
+\toprule
+Item & Value \\
+\midrule
+\endfirsthead
+\toprule
+Item & Value \\
+\midrule
+\endhead
+Entry point & \texttt{los\_path\_follower = boat\_navigation.los\_path\_follower:main} \\
+Class & \texttt{LosPathFollower} \\
+File & \texttt{src/boat\_navigation/boat\_navigation/los\_path\_follower.py} \\
+Helpers & \texttt{guidance.py}, \texttt{pid.py}, \texttt{path\_utils.py} \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{10.2 Parameters}
+
+
+All mirrored in \texttt{navigation.yaml} (\texttt{los\_path\_follower}) with same values as code defaults, except launch may set \texttt{use\_builtin\_path: false} when mission is on.
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lp{10cm}@{}}
+\toprule
+Name & Default \\
+\midrule
+\endfirsthead
+\toprule
+Name & Default \\
+\midrule
+\endhead
+\texttt{control\_rate\_hz} & \texttt{10.0} \\
+\texttt{lookahead\_m} & \texttt{15.0} \\
+\texttt{accept\_radius\_m} & \texttt{8.0} \\
+\texttt{pass\_epsilon\_m} & \texttt{2.0} \\
+\texttt{loop} & \texttt{True} \\
+\texttt{u\_ref} & \texttt{0.35} \\
+\texttt{u\_max} & \texttt{0.5} \\
+\texttt{r\_max} & \texttt{0.3} \\
+\texttt{patrol\_half\_size} & \texttt{120.0} \\
+\texttt{pose\_timeout\_s} & \texttt{1.0} \\
+\texttt{odom\_topic} & \texttt{odom} \\
+\texttt{plan\_topic} & \texttt{plan} \\
+\texttt{active\_plan\_topic} & \texttt{plan/active} \\
+\texttt{cmd\_vel\_topic} & \texttt{cmd\_vel} \\
+\texttt{debug\_topic} & \texttt{nav/debug} \\
+\texttt{use\_builtin\_path} & \texttt{True} (false under mission) \\
+\texttt{kp\_yaw}, \texttt{ki\_yaw}, \texttt{kd\_yaw}, \texttt{integral\_limit\_yaw} & \texttt{1.5}, \texttt{0.05}, \texttt{0.2}, \texttt{1.0} \\
+\texttt{kp\_u}, \texttt{ki\_u}, \texttt{kd\_u}, \texttt{integral\_limit\_u} & \texttt{1.0}, \texttt{0.1}, \texttt{0.0}, \texttt{1.0} \\
+\texttt{speed\_mode} & \texttt{'open\_loop'} (\texttt{'pid'} optional) \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{10.3 Subscriptions}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lllp{5.2cm}@{}}
+\toprule
+Topic & Rel/Abs & Type & Callback purpose \\
+\midrule
+\endfirsthead
+\toprule
+Topic & Rel/Abs & Type & Callback purpose \\
+\midrule
+\endhead
+\texttt{odom} & relative → e.g. \texttt{/asv1/odom} & \texttt{nav\_msgs/Odometry} & Pose, yaw, measured surge; stamp for staleness. \\
+\texttt{plan} & relative & \texttt{nav\_msgs/Path} & Replace active path; reindex nearest segment; \textbf{TRANSIENT\_LOCAL} sub. \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{10.4 Publishers}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lllp{5.2cm}@{}}
+\toprule
+Topic & Rel/Abs & Type & When \\
+\midrule
+\endfirsthead
+\toprule
+Topic & Rel/Abs & Type & When \\
+\midrule
+\endhead
+\texttt{cmd\_vel} & relative & \texttt{Twist} & Control timer (or stop) \\
+\texttt{plan/active} & relative & \texttt{Path} & When path set; \textbf{TRANSIENT\_LOCAL} \\
+\texttt{nav/debug} & relative & \texttt{Float32MultiArray} & Each control tick: cross, along, heading, heading\_err, surge, segment\_index \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{10.5 Timers / QoS}
+
+
+\begin{itemize}[leftmargin=*]
+\item \textbf{Timer:} \textbf{10 Hz} control loop.
+\item \textbf{QoS:} plan in/out Reliable + \textbf{TRANSIENT\_LOCAL}, depth 1.
+\end{itemize}
+
+
+\subsection{10.6 Algorithm pipeline}
+
+
+\begin{itemize}[leftmargin=*]
+\item Optional builtin square patrol if \texttt{use\_builtin\_path}.
+\item If no path / stale odom → publish zero Twist.
+\item LOS heading to lookahead point on current segment; PID yaw → \texttt{angular.z}.
+\item Speed: open-loop scaled by heading error, or closed-loop PID on surge.
+\item Advance segment on accept radius / pass geometry; loop or stop at end.
+\end{itemize}
+
+
+\subsection{10.7 Dependencies}
+
+
+\begin{itemize}[leftmargin=*]
+\item Bridge providing \texttt{odom}; \texttt{thrust\_mixer} on \texttt{cmd\_vel}; plan source = \texttt{mission\_manager} / \texttt{spiral\_demo} / builtin path.
+\item Requires \texttt{autonomy:=true} in sim launch.
+\end{itemize}
+
+
+
+
+\section{11. \texttt{boat\_navigation} --- \texttt{trajectory\_plotter}}
+
+
+\subsection{11.1 Identity}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lp{10cm}@{}}
+\toprule
+Item & Value \\
+\midrule
+\endfirsthead
+\toprule
+Item & Value \\
+\midrule
+\endhead
+Entry point & \texttt{trajectory\_plotter = boat\_navigation.trajectory\_plotter:main} \\
+Class & \texttt{TrajectoryPlotter} \\
+File & \texttt{src/boat\_navigation/boat\_navigation/trajectory\_plotter.py} \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{11.2 Parameters}
+
+
+No dedicated YAML file; \texttt{sim.launch.py} / multi-ASV block set key overlays. Code defaults:
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}llp{7.2cm}@{}}
+\toprule
+Name & Code default & Typical launch \\
+\midrule
+\endfirsthead
+\toprule
+Name & Code default & Typical launch \\
+\midrule
+\endhead
+\texttt{pose\_topic} & \texttt{pose2d} & same \\
+\texttt{trajectory\_topic} & \texttt{trajectory} & same \\
+\texttt{active\_plan\_topic} & \texttt{plan/active} & same \\
+\texttt{anomaly\_topic} & \texttt{mag/anomaly} & same \\
+\texttt{asv\_namespaces} & \texttt{['']} (single relative mode) & \texttt{['asv1','asv2']} multi \\
+\texttt{peak\_topic} & \texttt{/swarm/belief/peak} & same \\
+\texttt{peak\_probability\_topic} & \texttt{/swarm/belief/peak\_probability} & same \\
+\texttt{centroid\_topic} & \texttt{/swarm/belief/centroid} & same \\
+\texttt{centroid\_spread\_topic} & \texttt{/swarm/belief/centroid\_spread} & same \\
+\texttt{fix\_topic} / \texttt{fix\_rms\_topic} & \texttt{/swarm/belief/fix} / \texttt{...\_rms} & same \\
+\texttt{lake\_half\_size\_m} & \texttt{150.0} & same \\
+\texttt{max\_history\_points} & \texttt{20000} & --- \\
+\texttt{sample\_distance\_m} & \texttt{0.2} & --- \\
+\texttt{heading\_arrow\_m} & \texttt{12.0} & --- \\
+\texttt{show\_true\_target} & \texttt{True} & \texttt{True} \\
+\texttt{target\_x} / \texttt{target\_y} & \texttt{80.0} / \texttt{-40.0} & \textbf{\texttt{55.0} / \texttt{-35.0}} (match planted dipole) \\
+\texttt{mag\_history\_points} & \texttt{6000} & --- \\
+\texttt{anomaly\_vmax\_nt} & \texttt{55.0} & \texttt{55.0} \\
+\texttt{anomaly\_hit\_threshold\_nt} & \texttt{15.0} & \texttt{15.0} \\
+\texttt{mission\_state\_topic} & \texttt{mission/state} & --- \\
+\texttt{verify\_result\_topic} & \texttt{/swarm/verify/result} & --- \\
+\texttt{mission\_complete\_topic} & \texttt{/swarm/mission/complete} & --- \\
+\texttt{mission\_status\_topic} & \texttt{/swarm/mission/status} & --- \\
+\texttt{verify\_confirmations\_required} & \texttt{4} & --- \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{11.3 Subscriptions (per boat + swarm)}
+
+
+\textbf{Per boat} (relative, or \texttt{/ns/...} when \texttt{asv\_namespaces} set):
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}llp{7.2cm}@{}}
+\toprule
+Topic & Type & Purpose \\
+\midrule
+\endfirsthead
+\toprule
+Topic & Type & Purpose \\
+\midrule
+\endhead
+\texttt{pose2d} & \texttt{Pose2D} & Track history / heading \\
+\texttt{plan/active} & \texttt{Path} & Draw LOS route (\textbf{TRANSIENT\_LOCAL}) \\
+\texttt{mag/anomaly} & \texttt{MagAnomaly} & Mag scatter + time series \\
+\texttt{mission/state} & \texttt{MissionState} & Phase banner \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\textbf{Swarm / absolute:}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}llp{7.2cm}@{}}
+\toprule
+Topic & Type & Purpose \\
+\midrule
+\endfirsthead
+\toprule
+Topic & Type & Purpose \\
+\midrule
+\endhead
+peak / peak\_probability & \texttt{PoseStamped} / \texttt{Float64} & Peak overlay \\
+centroid / centroid\_spread & \texttt{PoseStamped} / \texttt{Float64} & Estimate + σ ring \\
+fix / fix\_rms & \texttt{PoseStamped} / \texttt{Float64} & Dipole fix \\
+\texttt{/swarm/verify/result} & \texttt{VerifyResult} & Confirmation UI \\
+\texttt{/swarm/mission/complete} & \texttt{Bool} & Latch confirmed (\textbf{TL}) \\
+\texttt{/swarm/mission/status} & \texttt{String} & Status text (\textbf{TL}) \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{11.4 Publishers / timers}
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lp{10cm}@{}}
+\toprule
+ &  \\
+\midrule
+\endfirsthead
+\toprule
+ &  \\
+\midrule
+\endhead
+Pub & \texttt{\{ns\}/trajectory} or relative \texttt{trajectory} (\texttt{Path}), \textbf{TRANSIENT\_LOCAL}, \textbf{1 Hz} \\
+Timer & \textbf{5 Hz} (\texttt{0.2} s) matplotlib redraw; \textbf{1 Hz} trajectory publish \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+\subsection{11.5 Algorithm pipeline}
+
+
+\begin{itemize}[leftmargin=*]
+\item Maintain per-boat track, route, anomaly history.
+\item Overlay true target, centroid, peak cell, dipole fix, shore box.
+\item Status strip maps modes → SEARCHING / HUNTING / HOLD / VERIFYING / CONFIRMED.
+\item Visualization only --- no control outputs.
+\end{itemize}
+
+
+\subsection{11.6 Dependencies}
+
+
+\begin{itemize}[leftmargin=*]
+\item Optional: any combination of pose, plan, anomaly, belief, mission topics. Disabled when \texttt{headless} or \texttt{plot\_trajectory:=false}.
+\end{itemize}
+
+
+
+
+\chapter{Part IV --- Executable Index}
+\label{ch:ros-catalog}
+
+This chapter is the authoritative software reference for every message, bridge, and node in the dual-ASV stack. Each node section lists identity, parameters, subscriptions, publications, timers, QoS, internal algorithm steps, and runtime dependencies.
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}lllp{5.2cm}@{}}
+\toprule
+Package & Console script & Class & Source file \\
+\midrule
+\endfirsthead
+\toprule
+Package & Console script & Class & Source file \\
+\midrule
+\endhead
+\texttt{boat\_control} & \texttt{thrust\_mixer} & \texttt{ThrustMixer} & \texttt{boat\_control/mixer.py} \\
+\texttt{boat\_sensing} & \texttt{mag\_driver} & \texttt{MagDriver} & \texttt{boat\_sensing/mag\_driver.py} \\
+\texttt{boat\_sensing} & \texttt{mag\_filter} & \texttt{MagFilter} & \texttt{boat\_sensing/mag\_filter.py} \\
+\texttt{boat\_sensing} & \texttt{calibration\_node} & \texttt{CalibrationNode} & \texttt{boat\_sensing/calibration\_node.py} \\
+\texttt{boat\_mapping} & \texttt{bayes\_fusion} & \texttt{BayesFusionNode} & \texttt{boat\_mapping/bayes\_fusion.py} \\
+\texttt{boat\_mission} & \texttt{mission\_manager} & \texttt{MissionManager} & \texttt{boat\_mission/mission\_manager.py} \\
+\texttt{boat\_mission} & \texttt{verify\_coordinator} & \texttt{VerifyCoordinator} & \texttt{boat\_mission/verify\_coordinator.py} \\
+\texttt{boat\_mission} & \texttt{spiral\_demo} & \texttt{SpiralDemo} & \texttt{boat\_mission/spiral\_demo.py} \\
+\texttt{boat\_navigation} & \texttt{gazebo\_pose2d} & \texttt{GazeboPose2D} & \texttt{boat\_navigation/gazebo\_pose2d.py} \\
+\texttt{boat\_navigation} & \texttt{los\_path\_follower} & \texttt{LosPathFollower} & \texttt{boat\_navigation/los\_path\_follower.py} \\
+\texttt{boat\_navigation} & \texttt{trajectory\_plotter} & \texttt{TrajectoryPlotter} & \texttt{boat\_navigation/trajectory\_plotter.py} \\
+\texttt{ros\_gz\_bridge} & \texttt{parameter\_bridge} (\texttt{boat\_bridge}) & (C++) & \texttt{config/bridge.yaml} \\
+\texttt{ros\_gz\_bridge} & \texttt{parameter\_bridge} (\texttt{clock\_bridge}) & (C++) & \texttt{config/clock\_bridge.yaml} \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+
+
+\chapter{Part V --- QoS Summary (non-default)}
+\label{ch:ros-catalog}
+
+This chapter is the authoritative software reference for every message, bridge, and node in the dual-ASV stack. Each node section lists identity, parameters, subscriptions, publications, timers, QoS, internal algorithm steps, and runtime dependencies.
+
+
+\begin{center}
+\small
+\begin{longtable}{@{}llp{7.2cm}@{}}
+\toprule
+Node & Topic(s) & Policy \\
+\midrule
+\endfirsthead
+\toprule
+Node & Topic(s) & Policy \\
+\midrule
+\endhead
+\texttt{mission\_manager} & \texttt{plan}, \texttt{/swarm/verify/result} & Reliable + TRANSIENT\_LOCAL, depth 1 \\
+\texttt{verify\_coordinator} & \texttt{/swarm/mission/complete}, \texttt{halt}, \texttt{/swarm/mission/status} & Reliable + TRANSIENT\_LOCAL, depth 1 \\
+\texttt{spiral\_demo} & \texttt{plan} & Reliable + TRANSIENT\_LOCAL, depth 1 \\
+\texttt{los\_path\_follower} & \texttt{plan} (sub), \texttt{plan/active} (pub) & Reliable + TRANSIENT\_LOCAL, depth 1 \\
+\texttt{trajectory\_plotter} & \texttt{plan/active} (sub), \texttt{trajectory} (pub), complete/status (sub) & Reliable + TRANSIENT\_LOCAL, depth 1 \\
+\bottomrule
+\end{longtable}
+\end{center}
+
+
+All other pubs/subs use rclpy defaults (typically Reliable, Volatile, depth as coded 10/20/50).
+
+
+
+
+\chapter{Part VI --- Minimum Runtime Graph (single ASV, full stack)}
+\label{ch:ros-catalog}
+
+This chapter is the authoritative software reference for every message, bridge, and node in the dual-ASV stack. Each node section lists identity, parameters, subscriptions, publications, timers, QoS, internal algorithm steps, and runtime dependencies.
+
+
+Must be running for a closed-loop magnetic search demo:
+
+
+\begin{enumerate}[leftmargin=*]
+\item Gazebo (\texttt{niot\_world} + \texttt{simple\_boat})
+\item \texttt{boat\_bridge} (+ \texttt{clock\_bridge} if \texttt{use\_sim\_time})
+\item \texttt{/asv1/thrust\_mixer}
+\item \texttt{/asv1/gazebo\_pose2d}
+\item \texttt{/asv1/los\_path\_follower} (\texttt{use\_builtin\_path:=false})
+\item \texttt{/asv1/mag\_driver} → \texttt{mag\_filter} → \texttt{calibration\_node}
+\item \texttt{bayes\_fusion}
+\item \texttt{/asv1/mission\_manager}
+\item \texttt{verify\_coordinator} (self-verify or multi-ASV)
+\item Optional: \texttt{trajectory\_plotter}
+\end{enumerate}
+
+
+Two-ASV adds mirrored \texttt{/asv2/*} stack, dual anomaly topics into fusion, \texttt{self\_verify:=false}, and peer verification via coordinator.
+
+
+
+
+\emph{End of catalog. Generated from source under \texttt{version\_3/src}.}

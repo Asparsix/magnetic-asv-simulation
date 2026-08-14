@@ -345,7 +345,7 @@
          The actual field anomaly is injected in mag_driver (ROS-side). -->
     <model name="magnetic_target">
       <static>true</static>
-      <pose>55 -35 2 0 0 0</pose>
+      <pose>0 -85 2 0 0 0</pose>
       <link name="marker">
         <visual name="visual">
           <geometry>
@@ -375,18 +375,25 @@
         </visual>
       </link>
     </model>
-    <!-- ASV1: SW shoreline start -->
+    <!-- ASV1: west strip — on first path waypoint, heading EAST along first leg -->
     <include>
       <uri>model://simple_boat</uri>
       <name>simple_boat</name>
-      <pose>-110 -110 0 0 0 0.785</pose>
+      <pose>-120 -120 0 0 0 0</pose>
     </include>
 
-    <!-- ASV2: SE shoreline start -->
+    <!-- ASV2: center strip — on first path waypoint, heading EAST -->
     <include>
       <uri>model://simple_boat_2</uri>
       <name>simple_boat_2</name>
-      <pose>110 -110 0 0 0 2.356</pose>
+      <pose>-33.333 -120 0 0 0 0</pose>
+    </include>
+
+    <!-- ASV3: east strip — on first path waypoint, heading EAST -->
+    <include>
+      <uri>model://simple_boat_3</uri>
+      <name>simple_boat_3</name>
+      <pose>53.333 -120 0 0 0 0</pose>
     </include>
 
 

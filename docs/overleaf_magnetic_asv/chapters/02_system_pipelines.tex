@@ -1,0 +1,141 @@
+\chapter{End-to-end ROS pipelines}
+\label{ch:pipelines}
+
+This chapter walks the live system as pipelines. Each arrow is a ROS topic
+(or Gazebo Transport channel). Chapter~\ref{ch:ros-catalog} then expands every
+node.
+
+\section{Pipeline A --- Motion control (closed loop)}
+\begin{verbatim}
+Gazebo dynamics
+   |  (Gazebo Transport: /world/.../dynamic_pose/info)
+   v
+gazebo_pose2d  --->  /asvK/pose2d
+   |
+   |  also: ros_gz_bridge ---> /asvK/odom
+   v
+los_path_follower
+   subs: /asvK/odom , /asvK/plan   (plan is TRANSIENT_LOCAL)
+   pubs: /asvK/cmd_vel , /asvK/plan/active , /asvK/nav/debug
+   v
+thrust_mixer
+   subs: /asvK/cmd_vel
+   pubs: /model/<boat>/joint/left|right_propeller_joint/cmd_thrust
+   v
+ros_gz_bridge (ROS_TO_GZ) ---> Gazebo propeller joints
+\end{verbatim}
+
+\paragraph{Who owns the path?}
+\texttt{mission\_manager} (or \texttt{spiral\_demo}) publishes
+\texttt{/asv\(K\)/plan}. The LOS follower latches the latest Path (QoS
+transient local) and tracks it until a new plan arrives. During HOLD / COMPLETE
+the mission manager publishes a trivial hold path near the current pose.
+
+\paragraph{Logic order inside one control cycle.}
+\begin{enumerate}[leftmargin=*]
+  \item Odometry updates boat pose for LOS geometry.
+  \item Cross-track error and lookahead yield a commanded heading.
+  \item Yaw PID $\rightarrow$ \texttt{angular.z}; surge policy $\rightarrow$
+        \texttt{linear.x}.
+  \item Mixer maps \((v,\omega)\) to left/right thrust floats.
+  \item Bridge writes thrusts into Gazebo; hydrodynamics integrate.
+\end{enumerate}
+
+\section{Pipeline B --- Magnetometry to cleaned anomaly}
+\begin{verbatim}
+Gazebo magnetometer
+   v
+ros_gz_bridge ---> /asvK/mag/gazebo   (sensor_msgs/MagneticField, Tesla)
+   v
+mag_driver
+   also uses: /asvK/pose2d , /asvK/cmd_vel
+   optionally overlays planted dipole A/(r^3+s^3)
+   pubs: /asvK/mag/raw                 (boat_msgs/MagReading, nT)
+   v
+mag_filter
+   spike reject + moving-average LPF
+   pubs: /asvK/mag/filtered , /asvK/mag/filter_status
+   v
+calibration_node
+   spatial heading-binned baseline + temporal high-pass
+   pubs: /asvK/mag/anomaly             (boat_msgs/MagAnomaly)
+         /asvK/calibration/status      (CALIBRATING|READY|DEGRADED)
+\end{verbatim}
+
+\paragraph{Why three stages?}
+\begin{itemize}[leftmargin=*]
+  \item \texttt{mag\_driver} owns units, pose stamping, motor flag, and the
+        synthetic dipole plant used only in simulation evaluation.
+  \item \texttt{mag\_filter} owns robust denoising so calibration does not
+        learn spikes.
+  \item \texttt{calibration\_node} owns ambient baseline learning and the
+        cleaned anomaly feature consumed by Bayes and verification.
+\end{itemize}
+
+\section{Pipeline C --- Shared belief and localization}
+\begin{verbatim}
+/asv1/mag/anomaly  --+
+                     +-->  bayes_fusion  -->  /swarm/belief/map
+/asv2/mag/anomaly  --+                    -->  /swarm/belief/peak
+                                          -->  /swarm/belief/peak_probability
+                                          -->  /swarm/belief/centroid
+                                          -->  /swarm/belief/centroid_mass
+                                          -->  /swarm/belief/centroid_spread
+                                          -->  /swarm/belief/fix
+                                          -->  /swarm/belief/fix_rms
+                                          -->  /swarm/belief/fix_samples
+\end{verbatim}
+
+\paragraph{Internal order in \texttt{bayes\_fusion}.}
+\begin{enumerate}[leftmargin=*]
+  \item Receive \texttt{MagAnomaly}; ignore if not calibrated (ABSTAIN).
+  \item Classify HIT / MISS / ABSTAIN against thresholds.
+  \item Update every grid cell with \(P_{\mathrm{det}}(d)\) likelihood; renormalize.
+  \item Compute discrete peak and belief-weighted centroid (+ spread).
+  \item Buffer strong samples into dipole fitter; optionally publish continuous fix.
+\end{enumerate}
+
+\section{Pipeline D --- Mission behaviour and swarm verify}
+\begin{verbatim}
+mission_manager (/asvK)
+   subs: pose2d, mag/anomaly, calibration/status,
+         /swarm/belief/{map,peak,peak_probability,centroid},
+         /swarm/verify/request , /swarm/mission/halt
+   pubs: /asvK/plan , /asvK/mission/state , /asvK/mission/mode ,
+         /asvK/mission/info_gain ,
+         /swarm/verify/declare , /swarm/verify/result
+
+verify_coordinator (global, once)
+   subs: /swarm/verify/declare , /swarm/verify/result
+   pubs: /swarm/verify/request , /swarm/mission/complete ,
+         /swarm/mission/halt , /swarm/mission/status
+\end{verbatim}
+
+\paragraph{Dual-ASV happy path.}
+\begin{enumerate}[leftmargin=*]
+  \item Both boats lawnmower Voronoi regions (\texttt{GLOBAL\_SEARCH}).
+  \item Belief HITs raise \(p^\star\); nearby boat enters
+        \texttt{TARGET\_SEARCH} (MI then spiral).
+  \item Discoverer declares candidate on \texttt{/swarm/verify/declare} and
+        HOLDs.
+  \item Coordinator assigns the other ASV on \texttt{/swarm/verify/request}.
+  \item Verifier orbits, counts strong confirmations, publishes
+        \texttt{VerifyResult}.
+  \item Coordinator latches COMPLETE / HALT; plotter banner shows
+        \textbf{CONFIRMED}.
+\end{enumerate}
+
+\section{Pipeline E --- Operator visualization}
+\texttt{trajectory\_plotter} (global in multi-ASV mode) subscribes to every
+boat's \texttt{pose2d}, \texttt{plan/active}, \texttt{mag/anomaly},
+\texttt{mission/state}, plus all \texttt{/swarm/belief/*} and verify/complete
+topics. It does not publish commands. The bottom status strip mirrors mission
+phase chips: SEARCH $\rightarrow$ HUNT $\rightarrow$ VERIFY $\rightarrow$
+CONFIRMED.
+
+\section{Minimum viable process set}
+To move one boat under LOS alone you need: Gazebo, bridges,
+\texttt{gazebo\_pose2d}, \texttt{los\_path\_follower}, \texttt{thrust\_mixer},
+and someone publishing a Path. To run the full magnetic mission you additionally
+need the sensing trio, \texttt{bayes\_fusion}, \texttt{mission\_manager}, and
+(for cooperative verify) \texttt{verify\_coordinator}.

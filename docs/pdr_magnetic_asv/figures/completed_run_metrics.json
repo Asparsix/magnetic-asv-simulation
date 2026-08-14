@@ -1,0 +1,18 @@
+{
+  "target": [
+    85.0,
+    40.0
+  ],
+  "complete": true,
+  "status": "MISSION_COMPLETE:verifier=asv1:conf=4:p=0.521",
+  "verify": {
+    "success": true,
+    "verifier": "asv1",
+    "conf": 4,
+    "p": 0.5214509532984684,
+    "cand": [
+      95.0,
+      15.0
+    ]
+  }
+}

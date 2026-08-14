@@ -135,6 +135,20 @@ class LosPathFollower(Node):
         self.last_odom_time = self.get_clock().now()
 
     def on_plan(self, msg):
+        # Empty path = explicit HOLD / stop (used by mission_manager).
+        if msg is None or len(msg.poses) == 0:
+            self.active_path = None
+            self.active_points = []
+            self.segment_index = 0
+            self.yaw_pid.reset()
+            self.speed_pid.reset()
+            self.publish_stop()
+            clear = Path()
+            clear.header.frame_id = 'map'
+            clear.header.stamp = self.get_clock().now().to_msg()
+            self.active_plan_pub.publish(clear)
+            self.get_logger().info('Cleared path — holding (zero cmd_vel)')
+            return
         if not valid_path(msg):
             self.get_logger().warn('Ignoring invalid plan message')
             return

@@ -4,6 +4,18 @@ from __future__ import annotations
 
 import math
 
+from shapely.geometry import LineString, MultiPoint, Point, Polygon
+from shapely.ops import substring, voronoi_diagram
+
+# Two/three shoreline corner starts on the 1 km lake (physical launch style).
+# Voronoi from these seeds partitions the ±450 m coverage box.
+DEFAULT_REGION_SEEDS_3 = (
+    (-450.0, -450.0),  # ASV1 — SW
+    (450.0, -450.0),   # ASV2 — SE
+    (450.0, 450.0),    # ASV3 — NE
+)
+DEFAULT_REGION_SEEDS_2 = DEFAULT_REGION_SEEDS_3[:2]
+
 
 def generate_lawnmower(
     min_x,
@@ -14,12 +26,46 @@ def generate_lawnmower(
     start_from_bottom=True,
 ):
     """Generate a rectangular boustrophedon (lawnmower) polyline."""
+    return generate_split_lawnmower(
+        min_x,
+        max_x,
+        min_y,
+        max_y,
+        spacing,
+        asv_index=0,
+        num_asvs=1,
+        start_from_bottom=start_from_bottom,
+    )
+
+
+def generate_split_lawnmower(
+    min_x,
+    max_x,
+    min_y,
+    max_y,
+    spacing,
+    asv_index=0,
+    num_asvs=1,
+    start_from_bottom=True,
+):
+    """
+    Lawnmower coverage with optional lane partitioning across ASVs.
+
+    Lanes are indexed from the start bound (bottom or top). ASV ``asv_index``
+    receives every lane where ``lane_id % num_asvs == asv_index``. Directions
+    alternate within that ASV's own lane sequence so each boat still zig-zags.
+    """
     if spacing <= 0.0:
         raise ValueError('spacing must be positive')
     if max_x <= min_x or max_y <= min_y:
         raise ValueError('invalid bounds')
+    num_asvs = int(num_asvs)
+    asv_index = int(asv_index)
+    if num_asvs < 1:
+        raise ValueError('num_asvs must be >= 1')
+    if asv_index < 0 or asv_index >= num_asvs:
+        raise ValueError('asv_index must satisfy 0 <= asv_index < num_asvs')
 
-    path = []
     if start_from_bottom:
         y = min_y
         y_end = max_y
@@ -29,20 +75,216 @@ def generate_lawnmower(
         y_end = min_y
         y_step = -spacing
 
-    moving_right = True
-    # Include final lane even if spacing does not land exactly on bound.
+    lane_ys = []
     while (y_step > 0 and y <= y_end + 1e-9) or (y_step < 0 and y >= y_end - 1e-9):
-        y_clamped = min(max(y, min_y), max_y)
-        if moving_right:
-            path.append((min_x, y_clamped))
-            path.append((max_x, y_clamped))
-        else:
-            path.append((max_x, y_clamped))
-            path.append((min_x, y_clamped))
-        moving_right = not moving_right
+        lane_ys.append(min(max(y, min_y), max_y))
         y += y_step
 
+    assigned = [
+        lane_y
+        for lane_id, lane_y in enumerate(lane_ys)
+        if lane_id % num_asvs == asv_index
+    ]
+    if not assigned:
+        # Degenerate box / oversplit — fall back to a single mid lane.
+        assigned = [0.5 * (min_y + max_y)]
+
+    path = []
+    moving_right = True
+    for lane_y in assigned:
+        if moving_right:
+            path.append((min_x, lane_y))
+            path.append((max_x, lane_y))
+        else:
+            path.append((max_x, lane_y))
+            path.append((min_x, lane_y))
+        moving_right = not moving_right
+
     return _dedupe(path)
+
+
+def default_region_seeds(num_asvs):
+    """Boundary launch seeds for the current multi-ASV count."""
+    num_asvs = int(num_asvs)
+    if num_asvs <= 1:
+        return [DEFAULT_REGION_SEEDS_3[0]]
+    if num_asvs == 2:
+        return list(DEFAULT_REGION_SEEDS_2)
+    if num_asvs == 3:
+        return list(DEFAULT_REGION_SEEDS_3)
+    raise ValueError('region seeds are only defined for 1–3 ASVs right now')
+
+
+def generate_voronoi_regions(boundary_poly, seeds):
+    """Clip a Voronoi diagram of ``seeds`` to ``boundary_poly`` (one poly per seed)."""
+    points = MultiPoint([Point(p) for p in seeds])
+    vor = voronoi_diagram(points, envelope=boundary_poly)
+    clipped_regions = [poly.intersection(boundary_poly) for poly in vor.geoms]
+
+    ordered_regions = []
+    for seed in seeds:
+        seed_point = Point(seed)
+        matched = None
+        for region in clipped_regions:
+            if region.is_empty:
+                continue
+            if region.covers(seed_point) or region.distance(seed_point) < 1e-6:
+                matched = region
+                break
+        if matched is None:
+            raise RuntimeError(f'no Voronoi cell found for seed {seed}')
+        ordered_regions.append(matched)
+    return ordered_regions
+
+
+def _perimeter_path(ext, p1, p2):
+    d1 = ext.project(Point(p1))
+    d2 = ext.project(Point(p2))
+    length = ext.length
+
+    if d1 <= d2:
+        if (d2 - d1) <= (d1 + (length - d2)):
+            geom = substring(ext, d1, d2)
+        else:
+            geom = LineString(
+                list(substring(ext, d1, 0).coords)
+                + list(substring(ext, length, d2).coords)
+            )
+    else:
+        if (d1 - d2) <= ((length - d1) + d2):
+            geom = substring(ext, d1, d2)
+        else:
+            geom = LineString(
+                list(substring(ext, d1, length).coords)
+                + list(substring(ext, 0, d2).coords)
+            )
+
+    clean_coords = []
+    for coord in list(geom.coords):
+        if not clean_coords or coord != clean_coords[-1]:
+            clean_coords.append(coord)
+    if len(clean_coords) >= 2:
+        return clean_coords[1:-1]
+    return []
+
+
+def generate_polygon_lawnmower(polygon, spacing, start_near=None):
+    """Boustrophedon coverage clipped to a Shapely polygon (region lawnmower).
+
+    If ``start_near`` is given (e.g. the ASV spawn / region seed), the first
+    sweep starts at the endpoint closer to that point so boats do not commute
+    across their region before coverage begins.
+    """
+    if spacing <= 0.0:
+        raise ValueError('spacing must be positive')
+    if polygon.is_empty:
+        return []
+
+    minx, miny, maxx, maxy = polygon.bounds
+    path = []
+    y = miny + spacing / 2.0
+    moving_right = True
+    start_dir_chosen = False
+    previous_endpoint = None
+    ext = polygon.exterior
+
+    while y <= maxy + 1e-9:
+        sweep_line = LineString([(minx, y), (maxx, y)])
+        intersection = sweep_line.intersection(polygon)
+        segments = []
+
+        if not intersection.is_empty:
+            if intersection.geom_type == 'LineString':
+                segments.append(intersection)
+            elif intersection.geom_type == 'MultiLineString':
+                segments.extend(list(intersection.geoms))
+
+        segments = sorted(segments, key=lambda s: s.centroid.x)
+        if (
+            not start_dir_chosen
+            and start_near is not None
+            and segments
+        ):
+            first = list(segments[0].coords)
+            left = first[0]
+            right = first[-1]
+            sx, sy = float(start_near[0]), float(start_near[1])
+            d_left = math.hypot(left[0] - sx, left[1] - sy)
+            d_right = math.hypot(right[0] - sx, right[1] - sy)
+            # Prefer starting at the nearer end of the first sweep.
+            moving_right = d_left <= d_right
+            start_dir_chosen = True
+        for segment in segments:
+            coords = list(segment.coords)
+            if not moving_right:
+                coords.reverse()
+            if previous_endpoint is not None:
+                path.extend(_perimeter_path(ext, previous_endpoint, coords[0]))
+            path.extend(coords)
+            previous_endpoint = coords[-1]
+            moving_right = not moving_right
+        y += spacing
+
+    return _dedupe([(float(x), float(y)) for x, y in path])
+
+
+def generate_region_lawnmower(
+    min_x,
+    max_x,
+    min_y,
+    max_y,
+    spacing,
+    asv_index=0,
+    num_asvs=1,
+    seeds=None,
+):
+    """
+    Voronoi-partition the coverage box and lawnmower only this ASV's region.
+
+    ``seeds`` are launch / region-centre points (flat list or Nx2). Defaults to
+    the two south-boundary shoreline starts used for the dual-ASV sim.
+    """
+    num_asvs = int(num_asvs)
+    asv_index = int(asv_index)
+    if num_asvs < 1:
+        raise ValueError('num_asvs must be >= 1')
+    if asv_index < 0 or asv_index >= num_asvs:
+        raise ValueError('asv_index must satisfy 0 <= asv_index < num_asvs')
+    if max_x <= min_x or max_y <= min_y:
+        raise ValueError('invalid bounds')
+
+    if num_asvs == 1:
+        return generate_lawnmower(min_x, max_x, min_y, max_y, spacing)
+
+    if seeds is None:
+        seed_list = default_region_seeds(num_asvs)
+    else:
+        flat = list(seeds)
+        if flat and isinstance(flat[0], (list, tuple)):
+            seed_list = [(float(p[0]), float(p[1])) for p in flat]
+        else:
+            if len(flat) % 2 != 0:
+                raise ValueError('seeds must be a flat [x1,y1,x2,y2,...] list')
+            seed_list = [
+                (float(flat[i]), float(flat[i + 1]))
+                for i in range(0, len(flat), 2)
+            ]
+    if len(seed_list) < num_asvs:
+        raise ValueError('need at least one seed per ASV')
+    seed_list = seed_list[:num_asvs]
+
+    boundary = Polygon([
+        (min_x, min_y),
+        (max_x, min_y),
+        (max_x, max_y),
+        (min_x, max_y),
+    ])
+    regions = generate_voronoi_regions(boundary, seed_list)
+    return generate_polygon_lawnmower(
+        regions[asv_index],
+        spacing,
+        start_near=seed_list[asv_index],
+    )
 
 
 def generate_expanding_spiral(
@@ -81,8 +323,13 @@ def generate_verification_orbit(
     num_points=12,
     margin_min=None,
     margin_max=None,
+    start_angle=0.0,
 ):
-    """Closed orbit around a candidate for Phase 8 verification densify."""
+    """Closed orbit around a candidate for Phase 8 verification densify.
+
+    ``start_angle`` (rad) rotates the first waypoint — used so a peer verifier
+    can enter from the side opposite the discoverer.
+    """
     if radius <= 0.0:
         raise ValueError('radius must be positive')
     if num_points < 3:
@@ -90,7 +337,7 @@ def generate_verification_orbit(
     cx, cy = center
     waypoints = []
     for i in range(num_points):
-        angle = 2.0 * math.pi * i / num_points
+        angle = start_angle + 2.0 * math.pi * i / num_points
         x = cx + radius * math.cos(angle)
         y = cy + radius * math.sin(angle)
         if margin_min is not None and margin_max is not None:
@@ -100,6 +347,15 @@ def generate_verification_orbit(
     # Close the loop for LOS path following.
     waypoints.append(waypoints[0])
     return _dedupe(waypoints)
+
+
+def opposite_approach_angle(candidate_xy, discoverer_xy):
+    """Orbit entry angle on the side opposite the discoverer."""
+    dx = candidate_xy[0] - discoverer_xy[0]
+    dy = candidate_xy[1] - discoverer_xy[1]
+    if abs(dx) < 1e-9 and abs(dy) < 1e-9:
+        return 0.0
+    return math.atan2(dy, dx)
 
 
 def generate_info_gain_candidates(current_pos, radii, num_angles=16, bounds=None):

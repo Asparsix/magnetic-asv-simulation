@@ -1,0 +1,78 @@
+\chapter{Introduction and document map}
+\label{ch:intro}
+
+\section{What this system does}
+We search a bounded lake for a compact magnetic dipole anomaly using one or
+more differential-thrust autonomous surface vehicles (ASVs). Each boat runs an
+identical ROS~2 node graph under its own namespace (\texttt{/asv1},
+\texttt{/asv2}, \texttt{/asv3}). A shared \texttt{/swarm} namespace hosts
+Bayesian fusion and verification arbitration. Gazebo Harmonic provides
+hydrodynamics and sensor plugins; \texttt{ros\_gz\_bridge} and a
+Gazebo-Transport pose helper connect the plant to ROS.
+
+The reference stack for this book is \texttt{version\_3}: a
+\(300\times300\,\mathrm{m}\) lake with up to \textbf{three ASVs}, vertical
+\textbf{strip} lawnmower coverage (dead corridor between strips), and peer
+verification after spiral densification. A long-form Markdown companion for
+developers lives at
+\texttt{docs/MAGNETIC\_ASV\_ROS2\_DEVELOPER\_MANUAL.md}.
+
+\section{How to read this book}
+\begin{description}[style=nextline,leftmargin=1.2cm]
+  \item[Chapter~\ref{ch:pipelines}] End-to-end pipelines: control loop, sensing
+        chain, belief loop, mission loop. Read this first to see how nodes
+        chain.
+  \item[Chapter~\ref{ch:algorithms}] Mathematical models (dipole, Bayes, MI,
+        inland-safe spiral, LOS).
+  \item[Chapter~\ref{ch:fsm}] Mission finite-state machine and cooperative
+        verify handshake.
+  \item[Chapter~\ref{ch:ros-catalog}] \textbf{The core of this manual:} every
+        message, bridge, and node with parameters, topics, and logic.
+  \item[Chapter~\ref{ch:ops}] Launches, namespaces, bags, and operator UI.
+  \item[Chapter~\ref{ch:accept}] What ``confirmed'' means in software vs
+        offline scoring against the planted target.
+\end{description}
+
+\section{Package inventory}
+\begin{center}
+\begin{tabular}{@{}lp{9.5cm}@{}}
+\toprule
+Package & Role \\
+\midrule
+\texttt{boat\_bringup} & Launches, YAML, Gazebo bridges \\
+\texttt{boat\_description} & SDF boats + lake world \\
+\texttt{boat\_msgs} & Custom message contracts \\
+\texttt{boat\_control} & \texttt{thrust\_mixer} \\
+\texttt{boat\_navigation} & Pose, LOS follower, plotter \\
+\texttt{boat\_sensing} & Mag driver, filter, calibration \\
+\texttt{boat\_mapping} & Bayes fusion + dipole fit \\
+\texttt{boat\_mission} & Mission FSM, planning, verify coordinator \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Namespace rules (critical)}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Relative topics} (no leading slash), e.g.\ \texttt{cmd\_vel},
+        resolve under the node namespace: on \texttt{/asv1} they become
+        \texttt{/asv1/cmd\_vel}.
+  \item \textbf{Absolute topics} (leading slash), e.g.\
+        \texttt{/swarm/belief/peak} or
+        \texttt{/model/simple\_boat/.../cmd\_thrust}, are global and identical
+        for every ASV.
+  \item Per-ASV stacks are launched \emph{inside} \texttt{/asv\(k\)}. Swarm
+        nodes (\texttt{bayes\_fusion}, \texttt{verify\_coordinator}) are
+        launched at the root.
+  \item Model map: \texttt{asv1}$\leftrightarrow$\texttt{simple\_boat},
+        \texttt{asv2}$\leftrightarrow$\texttt{simple\_boat\_2},
+        \texttt{asv3}$\leftrightarrow$\texttt{simple\_boat\_3}.
+\end{itemize}
+
+\section{Primary demo}
+\begin{verbatim}
+cd version_3 && source install/setup.bash
+ros2 launch boat_bringup multi_asv_phase4.launch.py
+\end{verbatim}
+Always kill leftover Gazebo/ROS/\texttt{thrust\_mixer} processes before a new
+run; latched \texttt{/swarm/mission/complete} from a prior domain looks like a
+false CONFIRMED.

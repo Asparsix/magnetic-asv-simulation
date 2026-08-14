@@ -1,0 +1,97 @@
+% =============================================================================
+% BOOK: Cooperative Magnetic ASV Search — System & ROS 2 Architecture Manual
+% Overleaf: set compiler to pdfLaTeX; main file = main.tex
+% Upload the entire overleaf_magnetic_asv/ folder (including chapters/).
+% =============================================================================
+\documentclass[11pt,a4paper,oneside,openany]{book}
+
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{setspace}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{float}
+\usepackage{fancyhdr}
+\usepackage{csquotes}
+\usepackage[numbers,sort&compress]{natbib}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue!45!black,
+  citecolor=blue!45!black,
+  urlcolor=blue!55!black
+}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\nouppercase{\leftmark}}
+\fancyhead[R]{\small Magnetic ASV --- ROS~2 Manual}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\title{\textbf{Cooperative Magnetic Anomaly Search\\
+with Differential-Thrust ASVs}\\[0.6em]
+\large A Book-Style Technical Manual:\\
+Algorithms, Pipelines, and Complete ROS~2 Architecture}
+\author{
+  System Documentation --- Competition / Proposal Package\\
+  ROS~2 Jazzy $\cdot$ Gazebo Harmonic $\cdot$ \texttt{version\_3} three-ASV strip stack
+}
+\date{\today}
+
+\begin{document}
+\frontmatter
+\maketitle
+
+\chapter*{Preface}
+\addcontentsline{toc}{chapter}{Preface}
+This manual is written like a software architecture book, not a short paper
+abstract. The goal is that a judge, teammate, or new developer can open a
+chapter, pick a ROS node, and know exactly:
+
+\begin{itemize}[leftmargin=*]
+  \item which package owns it and how it is launched;
+  \item every parameter (code default vs YAML override);
+  \item every subscription and publication (relative vs absolute topic);
+  \item the callback / timer logic in order;
+  \item how that node sits in the end-to-end pipeline.
+\end{itemize}
+
+The reference implementation described here is the three-ASV
+\texttt{version\_3} workspace (\(300\,\mathrm{m}\) lake, strip coverage). Larger
+lakes reuse the same nodes with scaled configuration. See also the Markdown
+developer manual \texttt{docs/MAGNETIC\_ASV\_ROS2\_DEVELOPER\_MANUAL.md}.
+
+\tableofcontents
+
+\mainmatter
+
+% ---------------------------------------------------------------------------
+\input{chapters/01_introduction}
+\input{chapters/02_system_pipelines}
+\input{chapters/03_algorithms}
+\input{chapters/04_mission_fsm}
+\input{chapters/ros_node_catalog}
+\input{chapters/05_launches_and_ops}
+\input{chapters/06_acceptance_and_scoring}
+
+\backmatter
+\begin{thebibliography}{99}
+\bibitem{ros2} Open Robotics, \emph{ROS~2 Jazzy Documentation},
+  \url{https://docs.ros.org/en/jazzy/}.
+\bibitem{gazebo} Open Robotics, \emph{Gazebo Sim Harmonic},
+  \url{https://gazebosim.org/}.
+\bibitem{shannon} C.~E.~Shannon, ``A mathematical theory of communication,''
+  \emph{Bell Syst.\ Tech.\ J.}, 1948.
+\bibitem{lm} K.~Levenberg, ``A method for the solution of certain non-linear
+  problems in least squares,'' \emph{Q.\ Appl.\ Math.}, 1944.
+\end{thebibliography}
+
+\end{document}

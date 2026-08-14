@@ -11,6 +11,23 @@ def test_verification_orbit_closed():
     assert abs(orbit[0][1] - orbit[-1][1]) < 1e-9
 
 
+def test_verification_orbit_opposite_approach():
+    """Peer verifier enters on the side opposite the discoverer."""
+    from boat_mission.path_planning import opposite_approach_angle
+
+    candidate = (0.0, 0.0)
+    discoverer = (-40.0, 0.0)  # west of candidate → approach from east
+    angle = opposite_approach_angle(candidate, discoverer)
+    assert abs(angle - 0.0) < 1e-9
+
+    orbit = generate_verification_orbit(
+        candidate, radius=20.0, num_points=8, start_angle=angle
+    )
+    # First waypoint should be on the +X (east) side.
+    assert orbit[0][0] > 0.0
+    assert abs(orbit[0][1]) < 1e-6
+
+
 def test_reading_confirms_near_candidate():
     assert reading_confirms_candidate(
         pose_xy=(-48.0, 60.0),

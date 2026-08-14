@@ -91,6 +91,8 @@ class VerifyCoordinator(Node):
         request.candidate_x = float(msg.candidate_x)
         request.candidate_y = float(msg.candidate_y)
         request.candidate_peak_p = float(msg.candidate_peak_p)
+        request.discoverer_x = float(msg.discoverer_x)
+        request.discoverer_y = float(msg.discoverer_y)
         self.active_request = request
         self.request_pub.publish(request)
         self.status_pub.publish(

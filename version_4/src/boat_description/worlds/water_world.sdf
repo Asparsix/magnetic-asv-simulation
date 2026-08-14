@@ -345,7 +345,7 @@
          The actual field anomaly is injected in mag_driver (ROS-side). -->
     <model name="magnetic_target">
       <static>true</static>
-      <pose>55 -35 2 0 0 0</pose>
+      <pose>220 280 2 0 0 0</pose>
       <link name="marker">
         <visual name="visual">
           <geometry>

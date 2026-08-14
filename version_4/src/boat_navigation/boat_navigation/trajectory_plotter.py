@@ -9,21 +9,32 @@ that reads relative topics under the node's own namespace.
 
 import math
 
-from boat_msgs.msg import MagAnomaly
+from boat_msgs.msg import MagAnomaly, MissionState, VerifyResult
 from geometry_msgs.msg import Pose2D, PoseStamped
 import matplotlib.pyplot as plt
 from matplotlib.cm import ScalarMappable
 from matplotlib.colors import Normalize
+from matplotlib.gridspec import GridSpec
 from nav_msgs.msg import Path
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
-from std_msgs.msg import Float64
+from std_msgs.msg import Bool, Float64, String
 
 
 # Match Gazebo hull colours: ASV1 red, ASV2 blue (then green / purple extras).
 BOAT_COLORS = ['#e41a1c', '#377eb8', '#4daf4a', '#984ea3']
 ROUTE_COLORS = ['#fc8d62', '#80b1d3', '#b3de69', '#bc80bd']
+
+# Banner colours for the mission-phase status strip.
+PHASE_BANNER = {
+    'SEARCHING': ('#1b4f72', '#d6eaf8'),   # dark blue on light blue
+    'HUNTING': ('#7d3c98', '#f5eef8'),     # purple
+    'HOLD': ('#b9770e', '#fef9e7'),        # amber
+    'VERIFYING': ('#b03a2e', '#fdedec'),   # red
+    'CONFIRMED': ('#196f3d', '#e8f8f5'),   # green
+    'WAITING': ('#566573', '#eaecee'),     # grey
+}
 
 
 class _BoatView:
@@ -44,6 +55,10 @@ class _BoatView:
         self.mag_t = []
         self.start_time = None
         self.trajectory_pub = None
+        self.mode = '—'
+        self.hunt_phase = ''
+        self.confirmations = 0
+        self.peak_p = 0.0
 
 
 class TrajectoryPlotter(Node):
@@ -79,11 +94,23 @@ class TrajectoryPlotter(Node):
         self.declare_parameter('mag_history_points', 6000)
         self.declare_parameter('anomaly_vmax_nt', 55.0)
         self.declare_parameter('anomaly_hit_threshold_nt', 15.0)
+        self.declare_parameter('mission_state_topic', 'mission/state')
+        self.declare_parameter(
+            'verify_result_topic', '/swarm/verify/result'
+        )
+        self.declare_parameter(
+            'mission_complete_topic', '/swarm/mission/complete'
+        )
+        self.declare_parameter(
+            'mission_status_topic', '/swarm/mission/status'
+        )
+        self.declare_parameter('verify_confirmations_required', 4)
 
         pose_topic = self.get_parameter('pose_topic').value
         trajectory_topic = self.get_parameter('trajectory_topic').value
         active_plan_topic = self.get_parameter('active_plan_topic').value
         anomaly_topic = self.get_parameter('anomaly_topic').value
+        mission_state_topic = self.get_parameter('mission_state_topic').value
         namespaces = [
             ns for ns in (self.get_parameter('asv_namespaces').value or [])
             if str(ns).strip()
@@ -96,6 +123,16 @@ class TrajectoryPlotter(Node):
         ).value
         fix_topic = self.get_parameter('fix_topic').value
         fix_rms_topic = self.get_parameter('fix_rms_topic').value
+        verify_result_topic = self.get_parameter('verify_result_topic').value
+        mission_complete_topic = self.get_parameter(
+            'mission_complete_topic'
+        ).value
+        mission_status_topic = self.get_parameter(
+            'mission_status_topic'
+        ).value
+        self.verify_required = int(
+            self.get_parameter('verify_confirmations_required').value
+        )
         self.lake_half_size = float(
             self.get_parameter('lake_half_size_m').value
         )
@@ -133,6 +170,9 @@ class TrajectoryPlotter(Node):
         self.fix_x = None
         self.fix_y = None
         self.fix_rms = None
+        self.mission_confirmed = False
+        self.swarm_status = ''
+        self.last_verify_result = None
 
         path_qos = QoSProfile(
             depth=1,
@@ -146,18 +186,19 @@ class TrajectoryPlotter(Node):
             specs = [
                 (ns, f'/{ns}/{pose_topic}', f'/{ns}/{active_plan_topic}',
                  f'/{ns}/{anomaly_topic}', f'/{ns}/{trajectory_topic}',
+                 f'/{ns}/{mission_state_topic}',
                  ns.upper())
                 for ns in namespaces
             ]
         else:
             specs = [
                 (None, pose_topic, active_plan_topic, anomaly_topic,
-                 trajectory_topic, 'Boat')
+                 trajectory_topic, mission_state_topic, 'Boat')
             ]
 
-        for index, (ns, pose_t, plan_t, anom_t, traj_t, label) in enumerate(
-            specs
-        ):
+        for index, (
+            ns, pose_t, plan_t, anom_t, traj_t, state_t, label
+        ) in enumerate(specs):
             boat = _BoatView(
                 label=label,
                 color=BOAT_COLORS[index % len(BOAT_COLORS)],
@@ -178,6 +219,10 @@ class TrajectoryPlotter(Node):
                 MagAnomaly, anom_t,
                 lambda msg, b=boat: self.on_anomaly(msg, b), 20
             )
+            self.create_subscription(
+                MissionState, state_t,
+                lambda msg, b=boat: self.on_mission_state(msg, b), 10
+            )
             self.boats.append(boat)
 
         self.create_subscription(
@@ -194,14 +239,30 @@ class TrajectoryPlotter(Node):
         )
         self.create_subscription(PoseStamped, fix_topic, self.on_fix, 10)
         self.create_subscription(Float64, fix_rms_topic, self.on_fix_rms, 10)
+        self.create_subscription(
+            VerifyResult, verify_result_topic, self.on_verify_result, 10
+        )
+        self.create_subscription(
+            Bool, mission_complete_topic, self.on_mission_complete, path_qos
+        )
+        self.create_subscription(
+            String, mission_status_topic, self.on_swarm_status, path_qos
+        )
 
         plt.ion()
-        self.figure, (self.ax_map, self.ax_mag) = plt.subplots(
-            1, 2, figsize=(16, 8),
-            gridspec_kw={'width_ratios': [1.25, 1.0]},
+        self.figure = plt.figure(figsize=(16, 9.5))
+        grid = GridSpec(
+            2, 2, figure=self.figure,
+            height_ratios=[1.0, 0.18],
+            width_ratios=[1.25, 1.0],
+            hspace=0.28, wspace=0.22,
         )
+        self.ax_map = self.figure.add_subplot(grid[0, 0])
+        self.ax_mag = self.figure.add_subplot(grid[0, 1])
+        self.ax_status = self.figure.add_subplot(grid[1, :])
+        self.ax_status.set_axis_off()
         self.figure.canvas.manager.set_window_title(
-            'Boat Trajectory, Target Estimate, and Magnetic Field'
+            'Boat Trajectory, Mission Phase, and Magnetic Field'
         )
         self._norm = Normalize(vmin=0.0, vmax=self.anomaly_vmax)
         scalar_map = ScalarMappable(norm=self._norm, cmap='inferno')
@@ -282,6 +343,26 @@ class TrajectoryPlotter(Node):
     def on_fix_rms(self, msg):
         self.fix_rms = float(msg.data)
 
+    def on_mission_state(self, msg, boat):
+        boat.mode = str(msg.mode or '—')
+        boat.hunt_phase = str(msg.hunt_phase or '')
+        boat.confirmations = int(msg.confirmations)
+        boat.peak_p = float(msg.peak_p)
+        if boat.mode == 'COMPLETE':
+            self.mission_confirmed = True
+
+    def on_verify_result(self, msg):
+        self.last_verify_result = msg
+        if msg.success:
+            self.mission_confirmed = True
+
+    def on_mission_complete(self, msg):
+        if msg.data:
+            self.mission_confirmed = True
+
+    def on_swarm_status(self, msg):
+        self.swarm_status = str(msg.data or '')
+
     def publish_trajectory(self):
         for boat in self.boats:
             if not boat.x_history:
@@ -305,9 +386,183 @@ class TrajectoryPlotter(Node):
 
         self._draw_map()
         self._draw_mag()
-        self.figure.tight_layout()
+        self._draw_status()
         self.figure.canvas.draw_idle()
         self.figure.canvas.flush_events()
+
+    def _phase_summary(self):
+        """Return (banner_key, headline, detail_lines)."""
+        if self.mission_confirmed:
+            detail = []
+            if self.last_verify_result is not None and self.last_verify_result.success:
+                vr = self.last_verify_result
+                detail.append(
+                    f'Verifier {vr.verifier_id}: {vr.confirmations}/'
+                    f'{self.verify_required} confirmations'
+                    f'  |  peak_p={vr.final_peak_p:.2f}'
+                )
+            if self.swarm_status:
+                detail.append(self.swarm_status)
+            for boat in self.boats:
+                detail.append(f'{boat.label}: {boat.mode}')
+            return (
+                'CONFIRMED',
+                'CONFIRMED  —  target verified',
+                detail or ['Mission complete'],
+            )
+
+        modes = {b.mode for b in self.boats}
+        verifying = [b for b in self.boats if b.mode == 'VERIFY']
+        holding = [b for b in self.boats if b.mode == 'HOLD']
+        hunting = [
+            b for b in self.boats
+            if b.mode == 'TARGET_SEARCH'
+        ]
+
+        if verifying:
+            conf = max(b.confirmations for b in verifying)
+            names = ', '.join(b.label for b in verifying)
+            detail = [
+                f'{b.label}: VERIFY  confirmations {b.confirmations}/'
+                f'{self.verify_required}'
+                for b in verifying
+            ]
+            for boat in self.boats:
+                if boat not in verifying:
+                    phase = boat.hunt_phase or '—'
+                    detail.append(f'{boat.label}: {boat.mode} {phase}'.strip())
+            return (
+                'VERIFYING',
+                f'VERIFYING  —  {names} confirming  '
+                f'({conf}/{self.verify_required})',
+                detail,
+            )
+
+        if holding:
+            detail = [
+                f'{b.label}: HOLD (waiting for peer verify)'
+                for b in holding
+            ]
+            for boat in self.boats:
+                if boat not in holding:
+                    detail.append(
+                        f'{boat.label}: {boat.mode} '
+                        f'{boat.hunt_phase or ""}'.strip()
+                    )
+            return (
+                'HOLD',
+                'HOLD / DECLARE  —  discoverer waiting, peer will verify',
+                detail,
+            )
+
+        if hunting:
+            detail = []
+            for boat in hunting:
+                phase = boat.hunt_phase or 'HUNT'
+                detail.append(
+                    f'{boat.label}: TARGET_SEARCH / {phase}'
+                    f'  p={boat.peak_p:.2f}'
+                )
+            for boat in self.boats:
+                if boat not in hunting:
+                    detail.append(f'{boat.label}: {boat.mode}')
+            phases = sorted({(b.hunt_phase or 'HUNT') for b in hunting})
+            return (
+                'HUNTING',
+                f'HUNTING  —  {" / ".join(phases)}'
+                '  (estimate may still oscillate)',
+                detail,
+            )
+
+        if any(b.mode == 'GLOBAL_SEARCH' for b in self.boats) or modes == {'—'}:
+            detail = [
+                f'{b.label}: {b.mode}'
+                + (f'  p={b.peak_p:.2f}' if b.peak_p > 0 else '')
+                for b in self.boats
+            ]
+            return (
+                'SEARCHING',
+                'SEARCHING  —  regional lawnmower coverage',
+                detail,
+            )
+
+        detail = [f'{b.label}: {b.mode} {b.hunt_phase}'.strip() for b in self.boats]
+        return ('WAITING', 'MISSION STATUS', detail)
+
+    def _draw_status(self):
+        axes = self.ax_status
+        axes.clear()
+        axes.set_axis_off()
+        axes.set_xlim(0, 1)
+        axes.set_ylim(0, 1)
+
+        key, headline, details = self._phase_summary()
+        fg, bg = PHASE_BANNER.get(key, PHASE_BANNER['WAITING'])
+        axes.add_patch(
+            plt.Rectangle(
+                (0.01, 0.08), 0.98, 0.84,
+                transform=axes.transAxes,
+                facecolor=bg,
+                edgecolor=fg,
+                linewidth=2.5,
+                zorder=0,
+            )
+        )
+        axes.text(
+            0.03, 0.62, headline,
+            transform=axes.transAxes,
+            fontsize=15,
+            fontweight='bold',
+            color=fg,
+            va='center',
+            ha='left',
+            zorder=1,
+        )
+        if details:
+            axes.text(
+                0.03, 0.28, '   |   '.join(details),
+                transform=axes.transAxes,
+                fontsize=10,
+                color='#2c3e50',
+                va='center',
+                ha='left',
+                zorder=1,
+            )
+
+        # Tab-like phase chips on the right.
+        chips = [
+            ('SEARCH', 'SEARCHING'),
+            ('HUNT', 'HUNTING'),
+            ('VERIFY', 'VERIFYING'),
+            ('CONFIRMED', 'CONFIRMED'),
+        ]
+        x0 = 0.58
+        for i, (label, chip_key) in enumerate(chips):
+            active = chip_key == key or (
+                key == 'HOLD' and chip_key == 'VERIFYING'
+            )
+            chip_fg, chip_bg = PHASE_BANNER[chip_key]
+            axes.add_patch(
+                plt.Rectangle(
+                    (x0 + i * 0.105, 0.55), 0.095, 0.32,
+                    transform=axes.transAxes,
+                    facecolor=chip_fg if active else '#f4f6f7',
+                    edgecolor=chip_fg,
+                    linewidth=1.5,
+                    zorder=1,
+                )
+            )
+            axes.text(
+                x0 + i * 0.105 + 0.0475, 0.71,
+                label,
+                transform=axes.transAxes,
+                fontsize=8,
+                fontweight='bold',
+                color='white' if active else chip_fg,
+                ha='center',
+                va='center',
+                zorder=2,
+            )
 
     def _draw_map(self):
         axes = self.ax_map

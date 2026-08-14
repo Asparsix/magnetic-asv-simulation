@@ -1,0 +1,51 @@
+\chapter{Launches, configuration, and operations}
+\label{ch:ops}
+
+\section{Primary launches}
+\begin{center}
+\begin{tabular}{@{}lp{8.8cm}@{}}
+\toprule
+Launch & Purpose \\
+\midrule
+\texttt{sim.launch.py} & Core world + \(1\)--\(2\) ASV stacks, feature flags \\
+\texttt{multi\_asv\_phase1.launch.py} & Two boats, no autonomy/sensing \\
+\texttt{multi\_asv\_phase2.launch.py} & Voronoi lawnmower only \\
+\texttt{multi\_asv\_phase3.launch.py} & Full stack + shared belief \\
+\texttt{multi\_asv\_phase4.launch.py} & Cooperative verify (demo default) \\
+\texttt{record.launch.py} / \texttt{replay.launch.py} & Bag workflows \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{YAML files (\texttt{boat\_bringup/config})}
+\begin{itemize}[leftmargin=*]
+  \item \texttt{sensing.yaml} --- driver, filter, calibration, planted dipole.
+  \item \texttt{mapping.yaml} --- belief grid, HIT thresholds, dipole fit.
+  \item \texttt{mission.yaml} --- coverage box, lawnmower, FSM gates, verify.
+  \item \texttt{navigation.yaml} --- LOS / PID / surge.
+  \item \texttt{bridge.yaml}, \texttt{clock\_bridge.yaml} --- Gazebo bridges.
+\end{itemize}
+Launch remaps and per-ASV overrides (namespace, model name, lawnmower index,
+\texttt{self\_verify}) sit in \texttt{sim.launch.py}.
+
+\section{Fast mode}
+\texttt{fast:=true} raises Gazebo RTF, starts \texttt{clock\_bridge}, and sets
+\texttt{use\_sim\_time} so timers follow \texttt{/clock}.
+
+\section{Inspecting the live graph}
+\begin{verbatim}
+ros2 node list
+ros2 topic list | grep -E 'asv|swarm'
+ros2 topic echo /asv1/mission/state --once
+ros2 topic echo /swarm/belief/fix --once
+ros2 topic echo /swarm/mission/status --once
+\end{verbatim}
+
+\section{Build and run (\texttt{version\_3})}
+\begin{verbatim}
+cd version_3
+source /opt/ros/jazzy/setup.bash
+colcon build --symlink-install
+source install/setup.bash
+ros2 launch boat_bringup multi_asv_phase4.launch.py
+\end{verbatim}

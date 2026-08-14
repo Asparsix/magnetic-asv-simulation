@@ -20,6 +20,7 @@ setup(
     entry_points={
         'console_scripts': [
             'mission_manager = boat_mission.mission_manager:main',
+            'spiral_demo = boat_mission.spiral_demo:main',
             'verify_coordinator = boat_mission.verify_coordinator:main',
         ],
     },

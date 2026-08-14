@@ -51,7 +51,7 @@
       <direction>-0.3 0.2 -1</direction>
     </light>
 
-  <!-- 300 m x 300 m lake centered at origin -->
+  <!-- 1000 m x 1000 m lake centered at origin -->
     <model name="water_surface">
       <static>true</static>
       <link name="link">
@@ -59,7 +59,7 @@
           <geometry>
             <plane>
               <normal>0 0 1</normal>
-              <size>300 300</size>
+              <size>1000 1000</size>
             </plane>
           </geometry>
           <material>
@@ -74,19 +74,19 @@
     <!-- Shoreline walls (collision-backed) -->
     <model name="north_shore">
       <static>true</static>
-      <pose>0 155 1.5 0 0 0</pose>
+      <pose>0 505 1.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry>
             <box>
-              <size>320 10 3</size>
+              <size>1020 10 3</size>
             </box>
           </geometry>
         </collision>
         <visual name="visual">
           <geometry>
             <box>
-              <size>320 10 3</size>
+              <size>1020 10 3</size>
             </box>
           </geometry>
           <material>
@@ -99,19 +99,19 @@
 
     <model name="south_shore">
       <static>true</static>
-      <pose>0 -155 1.5 0 0 0</pose>
+      <pose>0 -505 1.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry>
             <box>
-              <size>320 10 3</size>
+              <size>1020 10 3</size>
             </box>
           </geometry>
         </collision>
         <visual name="visual">
           <geometry>
             <box>
-              <size>320 10 3</size>
+              <size>1020 10 3</size>
             </box>
           </geometry>
           <material>
@@ -124,19 +124,19 @@
 
     <model name="east_shore">
       <static>true</static>
-      <pose>155 0 1.5 0 0 0</pose>
+      <pose>505 0 1.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry>
             <box>
-              <size>10 320 3</size>
+              <size>10 1020 3</size>
             </box>
           </geometry>
         </collision>
         <visual name="visual">
           <geometry>
             <box>
-              <size>10 320 3</size>
+              <size>10 1020 3</size>
             </box>
           </geometry>
           <material>
@@ -149,19 +149,19 @@
 
     <model name="west_shore">
       <static>true</static>
-      <pose>-155 0 1.5 0 0 0</pose>
+      <pose>-505 0 1.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry>
             <box>
-              <size>10 320 3</size>
+              <size>10 1020 3</size>
             </box>
           </geometry>
         </collision>
         <visual name="visual">
           <geometry>
             <box>
-              <size>10 320 3</size>
+              <size>10 1020 3</size>
             </box>
           </geometry>
           <material>
@@ -175,7 +175,7 @@
     <!-- Corner landscaping -->
     <model name="northwest_corner">
       <static>true</static>
-      <pose>-150 150 1 0 0 0</pose>
+      <pose>-500 500 1 0 0 0</pose>
       <link name="link">
         <visual name="visual">
           <geometry>
@@ -194,7 +194,7 @@
 
     <model name="northeast_corner">
       <static>true</static>
-      <pose>150 150 1 0 0 0</pose>
+      <pose>500 500 1 0 0 0</pose>
       <link name="link">
         <visual name="visual">
           <geometry>
@@ -213,7 +213,7 @@
 
     <model name="southeast_corner">
       <static>true</static>
-      <pose>150 -150 1 0 0 0</pose>
+      <pose>500 -500 1 0 0 0</pose>
       <link name="link">
         <visual name="visual">
           <geometry>
@@ -232,7 +232,7 @@
 
     <model name="southwest_corner">
       <static>true</static>
-      <pose>-150 -150 1 0 0 0</pose>
+      <pose>-500 -500 1 0 0 0</pose>
       <link name="link">
         <visual name="visual">
           <geometry>
@@ -249,38 +249,10 @@
       </link>
     </model>
 
-    <!-- Central island -->
-    <model name="island">
-      <static>true</static>
-      <pose>40 30 0.8 0 0 0</pose>
-      <link name="link">
-        <collision name="collision">
-          <geometry>
-            <cylinder>
-              <radius>12</radius>
-              <length>1.6</length>
-            </cylinder>
-          </geometry>
-        </collision>
-        <visual name="visual">
-          <geometry>
-            <cylinder>
-              <radius>12</radius>
-              <length>1.6</length>
-            </cylinder>
-          </geometry>
-          <material>
-            <ambient>0.22 0.52 0.22 1</ambient>
-            <diffuse>0.22 0.52 0.22 1</diffuse>
-          </material>
-        </visual>
-      </link>
-    </model>
-
     <!-- Dock on southwest shore -->
     <model name="dock">
       <static>true</static>
-      <pose>-120 -120 0.3 0 0 0.785</pose>
+      <pose>-450 -450 0.3 0 0 0.785</pose>
       <link name="link">
         <visual name="visual">
           <geometry>
@@ -296,10 +268,10 @@
       </link>
     </model>
 
-    <!-- Marker buoys along patrol route -->
+    <!-- Marker buoys near coverage corners -->
     <model name="buoy_1">
       <static>true</static>
-      <pose>-120 -120 0.5 0 0 0</pose>
+      <pose>-450 -450 0.5 0 0 0</pose>
       <link name="link">
         <visual name="visual">
           <geometry>
@@ -317,7 +289,7 @@
 
     <model name="buoy_2">
       <static>true</static>
-      <pose>120 -120 0.5 0 0 0</pose>
+      <pose>450 -450 0.5 0 0 0</pose>
       <link name="link">
         <visual name="visual">
           <geometry>
@@ -335,7 +307,7 @@
 
     <model name="buoy_3">
       <static>true</static>
-      <pose>120 120 0.5 0 0 0</pose>
+      <pose>450 450 0.5 0 0 0</pose>
       <link name="link">
         <visual name="visual">
           <geometry>
@@ -353,7 +325,7 @@
 
     <model name="buoy_4">
       <static>true</static>
-      <pose>-120 120 0.5 0 0 0</pose>
+      <pose>-450 450 0.5 0 0 0</pose>
       <link name="link">
         <visual name="visual">
           <geometry>
@@ -373,7 +345,7 @@
          The actual field anomaly is injected in mag_driver (ROS-side). -->
     <model name="magnetic_target">
       <static>true</static>
-      <pose>-50 70 2 0 0 0</pose>
+      <pose>220 280 2 0 0 0</pose>
       <link name="marker">
         <visual name="visual">
           <geometry>
@@ -404,10 +376,25 @@
       </link>
     </model>
 
+    <!-- ASV1: SW shoreline start (Voronoi region 0). -->
     <include>
       <uri>model://simple_boat</uri>
       <name>simple_boat</name>
-      <pose>-110 -110 0 0 0 0.785</pose>
+      <pose>-450 -450 0 0 0 0.785</pose>
+    </include>
+
+    <!-- ASV2: SE shoreline start (Voronoi region 1). -->
+    <include>
+      <uri>model://simple_boat_2</uri>
+      <name>simple_boat_2</name>
+      <pose>450 -450 0 0 0 2.356</pose>
+    </include>
+
+    <!-- ASV3: NE shoreline start (Voronoi region 2). -->
+    <include>
+      <uri>model://simple_boat_3</uri>
+      <name>simple_boat_3</name>
+      <pose>450 450 0 0 0 -2.356</pose>
     </include>
 
   </world>

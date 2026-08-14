@@ -23,8 +23,10 @@ from std_msgs.msg import Bool, Float64, String
 from boat_mission.info_gain import InfoGainPlanner
 from boat_mission.path_planning import (
     generate_expanding_spiral,
-    generate_lawnmower,
+    generate_region_lawnmower,
+    generate_split_lawnmower,
     generate_verification_orbit,
+    opposite_approach_angle,
 )
 from boat_mission.verify_core import VerificationTracker
 from boat_navigation.path_utils import make_path
@@ -57,6 +59,7 @@ class MissionManager(Node):
         self.declare_parameter(
             'peak_probability_topic', '/swarm/belief/peak_probability'
         )
+        self.declare_parameter('centroid_topic', '/swarm/belief/centroid')
         self.declare_parameter('belief_map_topic', '/swarm/belief/map')
         self.declare_parameter('declare_topic', '/swarm/verify/declare')
         self.declare_parameter('verify_request_topic', '/swarm/verify/request')
@@ -68,6 +71,16 @@ class MissionManager(Node):
         self.declare_parameter('min_y', -120.0)
         self.declare_parameter('max_y', 120.0)
         self.declare_parameter('lawnmower_spacing', 40.0)
+        self.declare_parameter('lawnmower_asv_index', 0)
+        self.declare_parameter('lawnmower_num_asvs', 1)
+        # 'voronoi' = geographic regions (default multi-ASV); 'lanes' = interleaved Y
+        self.declare_parameter('lawnmower_partition', 'voronoi')
+        # Flat [x1,y1,x2,y2,...] shoreline seeds. Non-empty default so ROS types
+        # this as DOUBLE_ARRAY (an empty [] would be inferred as BYTE_ARRAY).
+        self.declare_parameter(
+            'region_seeds',
+            [-450.0, -450.0, 450.0, -450.0, 450.0, 450.0],
+        )
         self.declare_parameter('control_rate_hz', 2.0)
 
         self.declare_parameter('p_enter_target_search', 0.25)
@@ -121,6 +134,7 @@ class MissionManager(Node):
         cal_topic = self.get_parameter('calibration_status_topic').value
         peak_topic = self.get_parameter('peak_topic').value
         peak_p_topic = self.get_parameter('peak_probability_topic').value
+        centroid_topic = self.get_parameter('centroid_topic').value
         belief_map_topic = self.get_parameter('belief_map_topic').value
         declare_topic = self.get_parameter('declare_topic').value
         verify_request_topic = self.get_parameter('verify_request_topic').value
@@ -132,6 +146,20 @@ class MissionManager(Node):
         self.min_y = float(self.get_parameter('min_y').value)
         self.max_y = float(self.get_parameter('max_y').value)
         self.lawnmower_spacing = float(self.get_parameter('lawnmower_spacing').value)
+        self.lawnmower_asv_index = int(
+            self.get_parameter('lawnmower_asv_index').value
+        )
+        self.lawnmower_num_asvs = int(
+            self.get_parameter('lawnmower_num_asvs').value
+        )
+        self.lawnmower_partition = str(
+            self.get_parameter('lawnmower_partition').value
+        ).strip().lower()
+        seeds_raw = self.get_parameter('region_seeds').value
+        self.region_seeds = [float(v) for v in seeds_raw] if seeds_raw else []
+        # Single-ASV missions don't need region seeds; drop the dual default.
+        if self.lawnmower_num_asvs <= 1:
+            self.region_seeds = []
         self.p_enter = float(self.get_parameter('p_enter_target_search').value)
         self.consecutive_required = int(
             self.get_parameter('consecutive_high_p_required').value
@@ -221,6 +249,7 @@ class MissionManager(Node):
         self.pose = None
         self.peak_xy = None
         self.peak_p = 0.0
+        self.centroid_xy = None
         self.latest_anomaly_nt = 0.0
         self.calibration_ready = not self.require_calibration_ready
         self.high_p_streak = 0
@@ -259,6 +288,9 @@ class MissionManager(Node):
         self.create_subscription(Pose2D, pose_topic, self.on_pose, 10)
         self.create_subscription(PoseStamped, peak_topic, self.on_peak, 10)
         self.create_subscription(Float64, peak_p_topic, self.on_peak_p, 10)
+        self.create_subscription(
+            PoseStamped, centroid_topic, self.on_centroid, 10
+        )
         self.create_subscription(BeliefGrid, belief_map_topic, self.on_belief, 10)
         self.create_subscription(MagAnomaly, anomaly_topic, self.on_anomaly, 50)
         self.create_subscription(
@@ -284,6 +316,15 @@ class MissionManager(Node):
 
     def on_peak_p(self, msg):
         self.peak_p = float(msg.data)
+
+    def on_centroid(self, msg):
+        self.centroid_xy = (msg.pose.position.x, msg.pose.position.y)
+
+    def _estimate_xy(self):
+        """Prefer the weighted centroid; fall back to the discrete peak cell."""
+        if self.centroid_xy is not None:
+            return self.centroid_xy
+        return self.peak_xy
 
     def on_belief(self, msg):
         self.planner.update_belief_grid(
@@ -317,9 +358,15 @@ class MissionManager(Node):
             return
         if msg.verifier_id and msg.verifier_id != self.asv_id:
             return
+        discoverer_xy = None
+        if math.isfinite(msg.discoverer_x) and math.isfinite(msg.discoverer_y):
+            # Zero/zero with empty discoverer means "unset" on older publishers.
+            if abs(msg.discoverer_x) > 1e-6 or abs(msg.discoverer_y) > 1e-6:
+                discoverer_xy = (msg.discoverer_x, msg.discoverer_y)
         self._start_verify(
             (msg.candidate_x, msg.candidate_y),
             reason=f'request_from_{msg.discoverer_id}',
+            discoverer_xy=discoverer_xy,
         )
 
     def _elapsed_s(self):
@@ -410,13 +457,14 @@ class MissionManager(Node):
         if self._elapsed_s() < self.min_seconds_before_switch:
             self.high_p_streak = 0
             return
-        if self.pose is None or self.peak_xy is None:
+        if self.pose is None or self._estimate_xy() is None:
             self.high_p_streak = 0
             return
 
+        estimate = self._estimate_xy()
         dist = math.hypot(
-            self.pose.x - self.peak_xy[0],
-            self.pose.y - self.peak_xy[1],
+            self.pose.x - estimate[0],
+            self.pose.y - estimate[1],
         )
         if self.peak_p >= self.p_enter and dist <= self.peak_near_radius:
             self.high_p_streak += 1
@@ -460,19 +508,20 @@ class MissionManager(Node):
         target, gain = self.planner.plan(
             (self.pose.x, self.pose.y),
             bounds=bounds,
-            peak_xy=self.peak_xy,
+            peak_xy=self._estimate_xy(),
         )
         self.last_info_gain = float(gain)
         self._publish_plan([(self.pose.x, self.pose.y), target], force=True)
         self._last_info_replan = now
         self.info_gain_steps += 1
 
-        if self.peak_xy is None:
+        estimate = self._estimate_xy()
+        if estimate is None:
             dist_peak = float('inf')
         else:
             dist_peak = math.hypot(
-                self.pose.x - self.peak_xy[0],
-                self.pose.y - self.peak_xy[1],
+                self.pose.x - estimate[0],
+                self.pose.y - estimate[1],
             )
 
         leave, reason = self._should_leave_info_gain(dist_peak)
@@ -484,11 +533,12 @@ class MissionManager(Node):
             self._start_spiral()
 
     def _start_spiral(self):
-        if self.peak_xy is None or self._spiral_published:
+        estimate = self._estimate_xy()
+        if estimate is None or self._spiral_published:
             return
         self.hunt_phase = self.PHASE_SPIRAL
         points = generate_expanding_spiral(
-            self.peak_xy,
+            estimate,
             step_spacing=self.spiral_step_spacing_m,
             max_radius=self.spiral_max_radius_m,
             ring_spacing=self.spiral_ring_spacing_m,
@@ -502,11 +552,12 @@ class MissionManager(Node):
         self._spiral_start_time = self.get_clock().now()
         self.get_logger().info(
             f'SPIRAL ({len(points)} waypoints) '
-            f'around ({self.peak_xy[0]:.1f},{self.peak_xy[1]:.1f})'
+            f'around ({estimate[0]:.1f},{estimate[1]:.1f})'
         )
 
     def _maybe_complete_spiral(self):
-        if self.hunt_phase != self.PHASE_SPIRAL or self.peak_xy is None:
+        estimate = self._estimate_xy()
+        if self.hunt_phase != self.PHASE_SPIRAL or estimate is None:
             return
 
         force = bool(self.get_parameter('force_spiral_complete').value)
@@ -514,8 +565,8 @@ class MissionManager(Node):
         dist = float('inf')
         if self.pose is not None:
             dist = math.hypot(
-                self.pose.x - self.peak_xy[0],
-                self.pose.y - self.peak_xy[1],
+                self.pose.x - estimate[0],
+                self.pose.y - estimate[1],
             )
 
         ready = force or (
@@ -541,27 +592,34 @@ class MissionManager(Node):
         self._declare_candidate()
 
         if self.self_verify or bool(self.get_parameter('force_verify').value):
-            self._start_verify(self.peak_xy, reason='self_verify_after_spiral')
+            estimate = self._estimate_xy()
+            if estimate is not None:
+                self._start_verify(estimate, reason='self_verify_after_spiral')
 
     def _declare_candidate(self):
-        if self._declared or self.peak_xy is None:
+        estimate = self._estimate_xy()
+        if self._declared or estimate is None:
             return
         req = VerifyRequest()
         req.header.stamp = self.get_clock().now().to_msg()
         req.header.frame_id = 'map'
         req.discoverer_id = self.asv_id
         req.verifier_id = ''
-        req.candidate_x = float(self.peak_xy[0])
-        req.candidate_y = float(self.peak_xy[1])
+        req.candidate_x = float(estimate[0])
+        req.candidate_y = float(estimate[1])
         req.candidate_peak_p = float(self.peak_p)
+        if self.pose is not None:
+            req.discoverer_x = float(self.pose.x)
+            req.discoverer_y = float(self.pose.y)
         self.declare_pub.publish(req)
         self._declared = True
         self.get_logger().info(
-            f'Declared candidate at ({req.candidate_x:.1f},{req.candidate_y:.1f}) '
+            f'Declared candidate (weighted centroid) at '
+            f'({req.candidate_x:.1f},{req.candidate_y:.1f}) '
             f'p={req.candidate_peak_p:.3f}'
         )
 
-    def _start_verify(self, candidate_xy, reason=''):
+    def _start_verify(self, candidate_xy, reason='', discoverer_xy=None):
         if self.mode == self.MODE_COMPLETE:
             return
         self.mode = self.MODE_VERIFY
@@ -570,21 +628,27 @@ class MissionManager(Node):
         self.confirmations = 0
         self._verify_orbit_published = False
 
+        start_angle = 0.0
+        if discoverer_xy is not None:
+            # Enter the orbit from the side opposite the discoverer.
+            start_angle = opposite_approach_angle(candidate_xy, discoverer_xy)
         points = generate_verification_orbit(
             candidate_xy,
             radius=self.verify_orbit_radius_m,
             num_points=self.verify_orbit_points,
             margin_min=(self.min_x, self.min_y),
             margin_max=(self.max_x, self.max_y),
+            start_angle=start_angle,
         )
         if self.pose is not None:
             points = [(self.pose.x, self.pose.y)] + points
         self._publish_plan(points, force=True)
         self._verify_orbit_published = True
+        side = 'opposite' if discoverer_xy is not None else 'default'
         self.get_logger().info(
             f'Switch → VERIFY reason={reason} candidate='
             f'({candidate_xy[0]:.1f},{candidate_xy[1]:.1f}) '
-            f'orbit={len(points)} pts'
+            f'orbit={len(points)} pts approach={side}'
         )
 
     def _finish_verify(self, success):
@@ -621,25 +685,50 @@ class MissionManager(Node):
         if (
             bool(self.get_parameter('force_verify').value)
             and self.mode not in (self.MODE_VERIFY, self.MODE_COMPLETE)
-            and self.peak_xy is not None
+            and self._estimate_xy() is not None
         ):
+            estimate = self._estimate_xy()
             self._declare_candidate()
-            self._start_verify(self.peak_xy, reason='force_verify')
+            self._start_verify(estimate, reason='force_verify')
 
         if self.mode == self.MODE_GLOBAL:
             if not self._lawnmower_published:
-                points = generate_lawnmower(
-                    self.min_x,
-                    self.max_x,
-                    self.min_y,
-                    self.max_y,
-                    self.lawnmower_spacing,
-                )
+                if self.lawnmower_partition == 'lanes':
+                    points = generate_split_lawnmower(
+                        self.min_x,
+                        self.max_x,
+                        self.min_y,
+                        self.max_y,
+                        self.lawnmower_spacing,
+                        asv_index=self.lawnmower_asv_index,
+                        num_asvs=self.lawnmower_num_asvs,
+                    )
+                    share_desc = (
+                        f'lane_share={self.lawnmower_asv_index}/'
+                        f'{self.lawnmower_num_asvs}'
+                    )
+                else:
+                    points = generate_region_lawnmower(
+                        self.min_x,
+                        self.max_x,
+                        self.min_y,
+                        self.max_y,
+                        self.lawnmower_spacing,
+                        asv_index=self.lawnmower_asv_index,
+                        num_asvs=self.lawnmower_num_asvs,
+                        seeds=self.region_seeds or None,
+                    )
+                    share_desc = (
+                        f'region={self.lawnmower_asv_index}/'
+                        f'{self.lawnmower_num_asvs} partition=voronoi'
+                    )
+                if self.pose is not None:
+                    points = [(self.pose.x, self.pose.y)] + points
                 self._publish_plan(points, force=True)
                 self._lawnmower_published = True
                 self.get_logger().info(
                     f'Published lawnmower path with {len(points)} vertices, '
-                    f'spacing={self.lawnmower_spacing:.1f} m'
+                    f'spacing={self.lawnmower_spacing:.1f} m, {share_desc}'
                 )
             self._try_mode_switch()
         elif self.mode == self.MODE_TARGET:

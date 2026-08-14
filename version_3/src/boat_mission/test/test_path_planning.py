@@ -8,8 +8,10 @@ from boat_mission.path_planning import (
     generate_lawnmower,
     generate_region_lawnmower,
     generate_split_lawnmower,
+    generate_strip_lawnmower,
     path_length,
     plan_info_gain_waypoint,
+    strip_coverage_bounds,
 )
 
 
@@ -73,6 +75,38 @@ def test_split_lawnmower_single_asv_matches_full():
     assert split == full
 
 
+def test_strip_lawnmower_three_asvs_leave_gap_corridor():
+    """Vertical strips never share an x-seam; gap corridor stays empty."""
+    shared = dict(
+        min_x=-120.0,
+        max_x=120.0,
+        min_y=-120.0,
+        max_y=120.0,
+        spacing=20.0,
+        num_asvs=3,
+        gap_m=20.0,
+    )
+    paths = [
+        generate_strip_lawnmower(asv_index=i, **shared) for i in range(3)
+    ]
+    for path in paths:
+        assert len(path) >= 4
+    # Pairwise x-ranges do not overlap.
+    ranges = [
+        (min(x for x, _ in p), max(x for x, _ in p)) for p in paths
+    ]
+    assert ranges[0][1] < ranges[1][0]
+    assert ranges[1][1] < ranges[2][0]
+    assert ranges[1][0] - ranges[0][1] >= 19.0
+    assert ranges[2][0] - ranges[1][1] >= 19.0
+    # Bounds helper matches.
+    left, right, _, _ = strip_coverage_bounds(
+        -120, 120, -120, 120, 1, 3, gap_m=20.0
+    )
+    assert abs(left - ranges[1][0]) < 1.0
+    assert abs(right - ranges[1][1]) < 1.0
+
+
 def test_region_lawnmower_two_asvs_are_geographic_halves():
     """South-boundary seeds → west / east Voronoi regions, no lane interleave."""
     shared = dict(
@@ -89,9 +123,9 @@ def test_region_lawnmower_two_asvs_are_geographic_halves():
     assert len(west) >= 4
     assert len(east) >= 4
 
-    # West region stays on x <= 0 (+tolerance); east on x >= 0.
-    assert max(x for x, _ in west) <= 1.0
-    assert min(x for x, _ in east) >= -1.0
+    # West region stays left of the seam; east stays right (with margin).
+    assert max(x for x, _ in west) <= -10.0
+    assert min(x for x, _ in east) >= 10.0
 
     # Mean x clearly separates the two regional paths.
     mean_west = sum(x for x, _ in west) / len(west)
@@ -100,6 +134,29 @@ def test_region_lawnmower_two_asvs_are_geographic_halves():
     assert mean_east > 20.0
     assert mean_east > mean_west
 
+    # First waypoint is near each shoreline seed (no cross-region commute).
+    assert math.hypot(west[0][0] - (-110.0), west[0][1] - (-110.0)) < 40.0
+    assert math.hypot(east[0][0] - 110.0, east[0][1] - (-110.0)) < 40.0
+    # East boat starts at the east end of its first sweep and moves west.
+    assert east[0][0] > east[1][0]
+
+
+def test_region_lawnmower_safety_margin_separates_shared_seam():
+    """Inset margin keeps west/east first-lane tips from meeting at x=0."""
+    shared = dict(
+        min_x=-120.0,
+        max_x=120.0,
+        min_y=-120.0,
+        max_y=120.0,
+        spacing=20.0,
+        num_asvs=2,
+        seeds=[(-110.0, -110.0), (110.0, -110.0)],
+        safety_margin_m=15.0,
+    )
+    west = generate_region_lawnmower(asv_index=0, **shared)
+    east = generate_region_lawnmower(asv_index=1, **shared)
+    gap = min(x for x, _ in east) - max(x for x, _ in west)
+    assert gap >= 20.0  # ~2 * margin across the seam
 
 
 def test_region_lawnmower_single_asv_matches_full():
@@ -123,6 +180,47 @@ def test_spiral_expands_around_center():
     radii = [math.hypot(x - center[0], y - center[1]) for x, y in spiral]
     assert max(radii) <= 40.0 + 1e-6
     assert min(radii) >= 20.0 - 1e-6
+
+
+def test_spiral_near_shore_stays_inside_bounds():
+    """East-shore peak must not push spiral waypoints onto / past x=120."""
+    from boat_mission.path_planning import generate_expanding_spiral
+
+    center = (98.5, 15.0)
+    spiral = generate_expanding_spiral(
+        center,
+        step_spacing=10.0,
+        max_radius=80.0,
+        ring_spacing=15.0,
+        margin_min=(-120.0, -120.0),
+        margin_max=(120.0, 120.0),
+        inland_inset_m=10.0,
+    )
+    assert spiral
+    for x, y in spiral:
+        assert -110.0 <= x <= 110.0, (x, y)
+        assert -110.0 <= y <= 110.0, (x, y)
+    # Usable radius room east of center is 120-98.5-10 = 11.5 m.
+    radii = [math.hypot(x - center[0], y - center[1]) for x, y in spiral]
+    assert max(radii) <= 11.5 + 1e-6
+
+
+def test_verification_orbit_shrinks_near_boundary():
+    from boat_mission.path_planning import generate_verification_orbit
+
+    orbit = generate_verification_orbit(
+        (95.0, 15.0),
+        radius=20.0,
+        num_points=12,
+        margin_min=(-120.0, -120.0),
+        margin_max=(120.0, 120.0),
+        inland_inset_m=10.0,
+    )
+    for x, y in orbit:
+        assert -110.0 <= x <= 110.0
+        assert -110.0 <= y <= 110.0
+    radii = [math.hypot(x - 95.0, y - 15.0) for x, y in orbit[:-1]]
+    assert max(radii) <= 15.0 + 1e-6  # 120-95-10 = 15
 
 
 def test_verification_orbit_in_path_planning():

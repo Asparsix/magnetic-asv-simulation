@@ -6,6 +6,8 @@ from boat_mission.path_planning import (
     generate_expanding_spiral,
     generate_info_gain_candidates,
     generate_lawnmower,
+    generate_region_lawnmower,
+    generate_split_lawnmower,
     path_length,
     plan_info_gain_waypoint,
 )
@@ -34,6 +36,101 @@ def test_lawnmower_rejects_bad_spacing():
         assert False, 'expected ValueError'
     except ValueError:
         pass
+
+
+def test_split_lawnmower_partitions_lanes_without_overlap():
+    shared = dict(
+        min_x=-100.0,
+        max_x=100.0,
+        min_y=-100.0,
+        max_y=100.0,
+        spacing=50.0,
+        num_asvs=2,
+    )
+    path0 = generate_split_lawnmower(asv_index=0, **shared)
+    path1 = generate_split_lawnmower(asv_index=1, **shared)
+
+    ys0 = sorted({round(y, 6) for _, y in path0})
+    ys1 = sorted({round(y, 6) for _, y in path1})
+    assert ys0 == [-100.0, 0.0, 100.0]
+    assert ys1 == [-50.0, 50.0]
+    assert set(ys0).isdisjoint(ys1)
+
+    # Each ASV still zig-zags on its own lane sequence.
+    assert path0[0] == (-100.0, -100.0)
+    assert path0[1] == (100.0, -100.0)
+    assert path0[2] == (100.0, 0.0)
+    assert path0[3] == (-100.0, 0.0)
+    assert path1[0] == (-100.0, -50.0)
+    assert path1[1] == (100.0, -50.0)
+
+
+def test_split_lawnmower_single_asv_matches_full():
+    full = generate_lawnmower(-80.0, 80.0, -60.0, 60.0, spacing=30.0)
+    split = generate_split_lawnmower(
+        -80.0, 80.0, -60.0, 60.0, spacing=30.0, asv_index=0, num_asvs=1
+    )
+    assert split == full
+
+
+def test_region_lawnmower_two_asvs_are_geographic_halves():
+    """South-boundary seeds → west / east Voronoi regions, no lane interleave."""
+    shared = dict(
+        min_x=-450.0,
+        max_x=450.0,
+        min_y=-450.0,
+        max_y=450.0,
+        spacing=100.0,
+        num_asvs=2,
+        seeds=[(-450.0, -450.0), (450.0, -450.0)],
+    )
+    west = generate_region_lawnmower(asv_index=0, **shared)
+    east = generate_region_lawnmower(asv_index=1, **shared)
+    assert len(west) >= 4
+    assert len(east) >= 4
+
+    # West region stays on x <= 0 (+tolerance); east on x >= 0.
+    assert max(x for x, _ in west) <= 1.0
+    assert min(x for x, _ in east) >= -1.0
+
+    # Mean x clearly separates the two regional paths.
+    mean_west = sum(x for x, _ in west) / len(west)
+    mean_east = sum(x for x, _ in east) / len(east)
+    assert mean_west < -50.0
+    assert mean_east > 50.0
+    assert mean_east > mean_west
+
+
+def test_region_lawnmower_three_asvs_cover_distinct_corners():
+    shared = dict(
+        min_x=-450.0,
+        max_x=450.0,
+        min_y=-450.0,
+        max_y=450.0,
+        spacing=150.0,
+        num_asvs=3,
+        seeds=[(-450.0, -450.0), (450.0, -450.0), (450.0, 450.0)],
+    )
+    paths = [
+        generate_region_lawnmower(asv_index=i, **shared) for i in range(3)
+    ]
+    assert all(len(p) >= 4 for p in paths)
+    means = [
+        (sum(x for x, _ in p) / len(p), sum(y for _, y in p) / len(p))
+        for p in paths
+    ]
+    # SW / SE / NE centroids should separate in the expected quadrants.
+    assert means[0][0] < 0.0 and means[0][1] < 50.0
+    assert means[1][0] > 0.0 and means[1][1] < 50.0
+    assert means[2][0] > -50.0 and means[2][1] > 0.0
+
+
+def test_region_lawnmower_single_asv_matches_full():
+    full = generate_lawnmower(-80.0, 80.0, -60.0, 60.0, spacing=30.0)
+    region = generate_region_lawnmower(
+        -80.0, 80.0, -60.0, 60.0, spacing=30.0, asv_index=0, num_asvs=1
+    )
+    assert region == full
 
 
 def test_spiral_expands_around_center():

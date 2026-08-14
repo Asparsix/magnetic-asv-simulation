@@ -1,7 +1,7 @@
-"""Phase 4 multi-ASV: cooperative discover / verify (2 ASVs).
+"""Phase 4 multi-ASV on the 300 m lake: 3 boats, cooperative discover/verify.
 
-One ASV densifies (info-gain → spiral), declares a candidate, and HOLDs.
-The other ASV is assigned as verifier and approaches from the opposite side.
+Shoreline seeds SW / SE / NE. One boat densifies, declares, and HOLDs; a peer
+verifies from the opposite side.
 """
 
 import os
@@ -24,7 +24,7 @@ def generate_launch_description():
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(sim_launch),
             launch_arguments={
-                'num_asvs': '2',
+                'num_asvs': '3',
                 'autonomy': 'true',
                 'mission': 'true',
                 'sensing': 'true',

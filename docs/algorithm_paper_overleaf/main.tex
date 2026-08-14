@@ -1,0 +1,513 @@
+% =============================================================================
+% Technical paper: Bayesian magnetic search, mutual information, dipole inverse
+% Overleaf: upload algorithm_paper.zip, main.tex, pdfLaTeX
+% =============================================================================
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{fancyhdr}
+\usepackage{listings}
+\usepackage{float}
+\usepackage{setspace}
+
+\hypersetup{colorlinks=true,linkcolor=blue!40!black,urlcolor=blue!50!black,citecolor=blue!40!black}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Bayesian Magnetic Search --- Algorithm Paper}
+\fancyhead[R]{\small Multi-ASV / ROS~2}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.35pt}
+\setstretch{1.08}
+
+\newtheorem{proposition}{Proposition}
+\newtheorem{remark}{Remark}
+
+\title{\textbf{Bayesian Grid Search, Mutual-Information Hunt,\\
+and Inverse-Cube Dipole Localization}\\[0.4em]
+\large An Engineering Algorithm Paper for the Cooperative ASV Magnetic Survey Stack}
+\author{Internal study document matching \texttt{version\_3} implementation\\
+(\texttt{bayes\_core.py}, \texttt{info\_gain.py}, \texttt{dipole\_fit.py})}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This paper explains \emph{exactly} the three estimation/planning algorithms used
+in the cooperative ASV magnetic survey: (1)~a discrete Bayesian occupancy
+search on a lake grid with a soft \(1/r^{3}\) detection likelihood;
+(2)~a mutual-information (MI) waypoint planner that chooses the next pose to
+maximize expected entropy reduction; (3)~a continuum inverse-cube dipole fit
+(Levenberg--Marquardt) that refines \((t_x,t_y,A)\) from strong anomaly samples.
+We state the physical inverse-cube law, the probabilistic model, the update
+algorithms, why they are consistent, the high-level parameters, and how a
+\emph{second} ASV uses the same dipole/belief products to verify. The goal is
+study material: after this paper one should be able to explain to others
+\emph{what} we do, \emph{why} it works, and \emph{which knobs} matter.
+\end{abstract}
+
+\tableofcontents
+\vspace{0.6em}
+
+%==============================================================================
+\section{Engineering picture (what the stack is doing)}
+%==============================================================================
+
+The magnetic target is unknown. Each ASV measures a scalar anomaly feature
+\(a\) (nT) after filtering/calibration. We never give estimators the planted
+truth \(\mathbf{t}^{\star}\). Three complementary estimators run in parallel:
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Bayesian grid (coarse, probabilistic).}
+        Maintain a probability mass \(b_k\) that the target sits in cell \(k\).
+        A HIT near a cell multiplies that cell by a high detection probability;
+        cells far away are down-weighted. This \emph{concentrates} belief.
+  \item \textbf{Mutual information (where to go next).}
+        Given current \(b\), score candidate poses by how much they would
+        \emph{shrink entropy in expectation}. Move there (hunt).
+  \item \textbf{Dipole inverse (fine, physics).}
+        Once many strong \(a_i\) exist, fit the continuum model
+        \(a=A/(r^{3}+s^{3})\) for location \((t_x,t_y)\) and amplitude \(A\).
+        This is the metre-class fix published on \texttt{/swarm/belief/fix}.
+\end{enumerate}
+
+Multi-ASV: all boats dump anomalies into \emph{one} shared map
+(\texttt{bayes\_fusion}). The discoverer hunts/spirals; a \emph{peer} verifier
+orbits the declared candidate using the same belief + dipole products.
+
+\begin{lstlisting}
+SEARCH (strips) -> Bayes HITs concentrate b
+ -> MI hunt -> spiral densify samples
+ -> declare candidate (centroid)
+ -> peer VERIFY (same dipole/Bayes evidence)
+ -> COMPLETE; score ||t_fix - t*||
+\end{lstlisting}
+
+%==============================================================================
+\section{Physical model: inverse-cube (why \(1/r^{3}\))}
+%==============================================================================
+
+\subsection{From magnetostatics to our scalar plant}
+A magnetic dipole \(\mathbf{m}\) at \(\mathbf{t}\) produces field (SI)
+\[
+\mathbf{B}(\mathbf{r})
+=\frac{\mu_0}{4\pi}
+\left(
+\frac{3(\mathbf{m}\cdot\hat{\mathbf{r}})\hat{\mathbf{r}}-\mathbf{m}}{r^{3}}
++\frac{2}{3}\mathbf{m}\,\delta^{3}(\mathbf{r})
+\right),
+\quad \mathbf{r}=\mathbf{p}-\mathbf{t}.
+\]
+Away from the origin the leading term scales as \(\mathbf{B}\propto 1/r^{3}\).
+For a \emph{vertical} dipole observed mainly in \(B_z\) near the surface, the
+scalar anomaly is well approximated by a radial \(1/r^{3}\) envelope.
+
+\subsection{Regularized plant used in code}
+To keep the field finite overhead (\(r=0\)) we use the \emph{softened} law
+implemented in \texttt{dipole.py} / \texttt{dipole\_fit.py}:
+\begin{equation}
+\label{eq:dipole}
+a(\mathbf{p};\,\mathbf{t},A,s)
+=\frac{A}{r^{3}+s^{3}},
+\qquad r=\lVert\mathbf{p}-\mathbf{t}\rVert_{2}.
+\end{equation}
+Parameters (YAML): \(A=4\times10^{5}\,\mathrm{nT\cdot m^{3}}\),
+\(s=20\,\mathrm{m}\) \(\Rightarrow\) peak overhead \(A/s^{3}=50\,\mathrm{nT}\).
+At \(r=s=20\,\mathrm{m}\), \(a=A/(2s^{3})=25\,\mathrm{nT}\).
+
+\begin{remark}[Inverse law]
+This is \textbf{not} Coulomb \(1/r^{2}\). Magnetic dipole far-field is
+\(\mathbf{B}\propto 1/r^{3}\). The \(s^{3}\) term is a numerical/physical
+softening (finite sensor height / source size), not a change of the far-field
+exponent.
+\end{remark}
+
+Noise model (plant): Earth background \(\sim 45{,}000\,\mathrm{nT}\) plus
+\(\mathcal{N}(0,3^{2})\,\mathrm{nT}\). HIT threshold \(15\,\mathrm{nT}\) is
+\(\sim 5\sigma\) above noise.
+
+%==============================================================================
+\section{Bayesian grid search}
+\label{sec:bayes}
+%==============================================================================
+
+\subsection{State}
+Discretize the \(300\times300\,\mathrm{m}\) lake into cells of size
+\(\Delta=10\,\mathrm{m}\) (origin \((-150,-150)\)): \(N=30\times30=900\) cells.
+Let \(T\in\{1,\ldots,N\}\) be the unknown target cell. Belief is a PMF
+\[
+b_k \triangleq \Pr(T=k),\qquad \sum_{k=1}^{N} b_k=1.
+\]
+\textbf{Prior:} uniform \(b_k^{(0)}=1/N\) (\texttt{BeliefMap} constructor).
+
+\subsection{Observation model (HIT / MISS / ABSTAIN)}
+From cleaned anomaly \(a_{\mathrm{cl}}\) (\texttt{classify\_observation}):
+\[
+z=
+\begin{cases}
+\mathrm{HIT} & a_{\mathrm{cl}}\ge \tau_{\mathrm{hit}}=15\,\mathrm{nT},\\
+\mathrm{MISS} & a_{\mathrm{cl}}\le \tau_{\mathrm{miss}}=5\,\mathrm{nT},\\
+\mathrm{ABSTAIN} & \text{otherwise (or uncalibrated)}.
+\end{cases}
+\]
+With \texttt{hit\_only: true}, MISS is treated as ABSTAIN (no update). This is
+conservative: weak ``no detection'' does not falsely erase mass.
+
+\subsection{Likelihood inspired by \(1/r^{3}\)}
+If the ASV is at \(\mathbf{x}\) and the hypothesized target is cell centre
+\(\mathbf{c}_k\), \(d_k=\lVert\mathbf{x}-\mathbf{c}_k\rVert\). Detection
+probability (\texttt{detection\_probability}):
+\begin{equation}
+\label{eq:pdet}
+P_{\mathrm{det}}(d)
+=P_{\mathrm{bg}}+(P_{\max}-P_{\mathrm{bg}})
+\frac{d_{1/2}^{3}}{d^{3}+d_{1/2}^{3}},
+\end{equation}
+with \(P_{\mathrm{bg}}=0.05\), \(P_{\max}=0.95\), \(d_{1/2}=30\,\mathrm{m}\).
+Interpretation:
+\begin{itemize}[leftmargin=*]
+  \item Far away: \(P_{\mathrm{det}}\to P_{\mathrm{bg}}\) (false-alarm floor).
+  \item Overhead: \(P_{\mathrm{det}}\to P_{\max}\) (almost sure detect).
+  \item Same \emph{shape} as the dipole envelope \(d^{3}/(d^{3}+d_{1/2}^{3})\).
+\end{itemize}
+We set
+\[
+\Pr(z=\mathrm{HIT}\mid T=k)=P_{\mathrm{det}}(d_k),\qquad
+\Pr(z=\mathrm{MISS}\mid T=k)=1-P_{\mathrm{det}}(d_k).
+\]
+
+\subsection{Bayes update (the algorithm)}
+One calibrated HIT at pose \(\mathbf{x}\):
+\begin{equation}
+\label{eq:bayes-hit}
+b_k^{+}
+\;\propto\;
+b_k^{-}\, P_{\mathrm{det}}(\lVert\mathbf{x}-\mathbf{c}_k\rVert),
+\qquad
+b^{+}=b^{+}/\textstyle\sum_{j} b_{j}^{+}.
+\end{equation}
+A MISS (if enabled) multiplies by \(1-P_{\mathrm{det}}\). This is exactly
+\texttt{BeliefMap.update} in \texttt{bayes\_core.py}.
+
+\begin{proposition}[Why HITs concentrate on the true cell]
+Assume the ASV records a HIT at \(\mathbf{x}\) near the true target cell
+\(k^{\star}\). Then \(P_{\mathrm{det}}(d_{k^{\star}})\gg P_{\mathrm{det}}(d_{\ell})\)
+for distant cells \(\ell\). After renormalization,
+\(b_{k^{\star}}\) increases relative to far cells. Repeated independent HITs
+around \(k^{\star}\) drive \(b\to\) a unimodal blob (MAP = peak cell).
+\end{proposition}
+
+\begin{remark}[Recursive Bayesian filter]
+This is a discrete Bayes filter / histogram filter on a static target.
+It is the same recursion as occupancy-grid ``target search'' (Stone / Bayesian
+search theory): likelihood \(\times\) prior, then normalize. It does
+\emph{not} assume Gaussianity.
+\end{remark}
+
+\subsection{Summaries published to ROS}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Peak} \(\arg\max_k b_k\) \(\to\) \texttt{/swarm/belief/peak},
+        \(p^{\star}=b_{\mathrm{peak}}\).
+  \item \textbf{Centroid} of cells with \(b_k\ge 0.5\,b_{\max}\), mass-weighted:
+        \[
+        \hat{\mathbf{t}}_{\mathrm{c}}
+        =\frac{\sum_{k\in\mathcal{H}} b_k\mathbf{c}_k}{\sum_{k\in\mathcal{H}} b_k},
+        \quad
+        \sigma^{2}
+        =\frac{\sum_{k\in\mathcal{H}} b_k\lVert\mathbf{c}_k-\hat{\mathbf{t}}_{\mathrm{c}}\rVert^{2}}
+              {\sum_{k\in\mathcal{H}} b_k}.
+        \]
+        Sub-cell estimate; \(\sigma\) is published as
+        \texttt{centroid\_spread}.
+\end{itemize}
+Mission uses \textbf{centroid preferred over peak} as the hunt/declare estimate.
+
+\subsection{Why this works (engineering argument)}
+\begin{enumerate}[leftmargin=*]
+  \item The likelihood \eqref{eq:pdet} is \emph{matched} to the physics
+        \eqref{eq:dipole}: both decay as \(1/d^{3}\). Matched filters beat
+        generic isotropic kernels.
+  \item Uniform prior + HIT-only updates cannot invent mass far from real HITs;
+        false HITs are suppressed by the \(15\,\mathrm{nT}\approx5\sigma\) gate.
+  \item Multiple ASVs share one \(b\) (independent observations, same \(T\)):
+        information adds. That is why ASV2/ASV3 lawnmower HITs help ASV1's map.
+  \item Limitation: grid quantization (\(\Delta=10\,\mathrm{m}\)) \(\Rightarrow\)
+        peak jumps between cell centres. Centroid + dipole LS fix that.
+\end{enumerate}
+
+\subsection{Pseudocode}
+\begin{lstlisting}
+b <- uniform(N cells)
+for each MagAnomaly (x,y,a_cl) from any ASV:
+  if not calibrated or 5 < a_cl < 15: continue   # ABSTAIN
+  if a_cl >= 15:   # HIT
+    for each cell k:
+      b[k] *= P_det(||(x,y)-c_k||)
+    b <- b / sum(b)
+publish peak, p*, centroid, spread
+\end{lstlisting}
+
+%==============================================================================
+\section{Mutual-information hunt}
+\label{sec:mi}
+%==============================================================================
+
+\subsection{Information-theoretic objective}
+Shannon entropy of the belief
+\[
+H(b)=-\sum_{k} b_k\log b_k
+\]
+(\texttt{belief\_entropy}; natural log). A good next pose \(\mathbf{c}\) is one
+that, \emph{in expectation}, reduces \(H\) the most. That expected reduction
+\emph{is} mutual information between target cell \(T\) and the next binary
+observation \(Z\in\{\mathrm{HIT},\mathrm{MISS}\}\):
+\begin{equation}
+\label{eq:mi}
+I(T;Z\mid\mathbf{c})
+=H(T)-H(T\mid Z,\mathbf{c})
+=H(b)-\mathbb{E}_{Z}\!\left[H(b'\mid Z,\mathbf{c})\right].
+\end{equation}
+
+\subsection{Predictive HIT probability}
+At candidate pose \(\mathbf{c}\),
+\[
+p_{\mathrm{HIT}}(\mathbf{c})
+=\sum_{k} b_k\, P_{\mathrm{det}}(\lVert\mathbf{c}-\mathbf{c}_k\rVert)
+\]
+(\texttt{expected\_posterior\_entropy}: \texttt{p\_hit = sum(b*p\_det)}).
+Then
+\[
+b^{\mathrm{HIT}}_k \propto b_k P_{\mathrm{det},k}(\mathbf{c}),\qquad
+b^{\mathrm{MISS}}_k \propto b_k\bigl(1-P_{\mathrm{det},k}(\mathbf{c})\bigr),
+\]
+and
+\[
+\mathbb{E}[H(b')]
+= p_{\mathrm{HIT}} H(b^{\mathrm{HIT}})
++(1-p_{\mathrm{HIT}}) H(b^{\mathrm{MISS}}).
+\]
+\texttt{mutual\_information\_gain} returns \(H(b)-\mathbb{E}[H(b')]\).
+
+\begin{proposition}[MI is non-negative]
+For any \(\mathbf{c}\), \(I(T;Z\mid\mathbf{c})\ge 0\), with equality iff \(Z\)
+is independent of \(T\) (e.g.\ \(P_{\mathrm{det}}\) constant in \(k\)). Hence
+the planner never ``expects to lose information.''
+\end{proposition}
+
+\subsection{Candidate generation (what we actually search)}
+We do \emph{not} optimize over the whole lake (too expensive). Ring candidates
+around current pose (\texttt{info\_gain\_radii}: \(10,20,30\,\mathrm{m}\),
+\(16\) angles) clipped to coverage bounds. Planner returns
+\(\arg\max_{\mathbf{c}} I(T;Z\mid\mathbf{c})\), replanned every \(5\,\mathrm{s}\).
+
+If the belief grid is not ready, fallback: pick the ring point closest to the
+current peak (with a small move penalty).
+
+\subsection{Why MI hunt works}
+\begin{itemize}[leftmargin=*]
+  \item Lawn mower is \emph{open-loop coverage}; MI is \emph{closed-loop}:
+        go where the next reading most distinguishes competing cells.
+  \item Near a unimodal blob, MI typically pulls the boat \emph{toward the
+        uncertain rim / closer to the peak}, not randomly.
+  \item Same \(P_{\mathrm{det}}\) as Bayes \(\Rightarrow\) planner and filter
+        are \textbf{model-consistent} (no planner/filter mismatch).
+  \item Exit to spiral when MI collapses, near peak (\(\le25\,\mathrm{m}\)),
+        step budget \(45\), or \(p^{\star}\ge0.5\) near estimate.
+\end{itemize}
+
+\subsection{Pseudocode}
+\begin{lstlisting}
+candidates = ring(current, radii={10,20,30}, 16 angles) inside bounds
+for c in candidates:
+  I[c] = H(b) - (pHIT*H(b_HIT) + pMISS*H(b_MISS))
+go to argmax I
+\end{lstlisting}
+
+%==============================================================================
+\section{Dipole inverse estimation (Levenberg--Marquardt)}
+\label{sec:dipole}
+%==============================================================================
+
+\subsection{Problem}
+Bayes gives a \emph{cell}. Physics gives a \emph{continuum} location. Buffer
+samples \(\{(x_i,y_i,a_i)\}\) with \(a_i\ge 10\,\mathrm{nT}\) (min 12, max 400)
+and solve
+\begin{equation}
+\label{eq:ls}
+\min_{t_x,t_y,A}
+\sum_{i=1}^{n}
+\left(
+\frac{A}{r_i^{3}+s^{3}}-a_i
+\right)^{2},
+\quad r_i=\sqrt{(x_i-t_x)^{2}+(y_i-t_y)^{2}},\ s=20.
+\end{equation}
+This is nonlinear least squares. Code: \texttt{DipoleFitter.fit}.
+
+\subsection{Jacobians (what LM actually uses)}
+Let \(f_i=A/(r_i^{3}+s^{3})\). Then
+\[
+\frac{\partial f_i}{\partial A}=\frac{1}{r_i^{3}+s^{3}},
+\qquad
+\frac{\partial f_i}{\partial r}=-3A r_i^{2}/(r_i^{3}+s^{3})^{2}.
+\]
+Chain rule \(\partial r/\partial t_x=-d_x/r\) yields
+\[
+\frac{\partial f_i}{\partial t_x}
+=\frac{3A r_i\, d_x}{(r_i^{3}+s^{3})^{2}},
+\quad
+\frac{\partial f_i}{\partial t_y}
+=\frac{3A r_i\, d_y}{(r_i^{3}+s^{3})^{2}}
+\]
+(\(r>0\); at \(r=0\) spatial grads vanish, soft term keeps \(f\) finite).
+LM solves \((J^{\top}J+\lambda D)\delta=-J^{\top}\mathbf{r}\) with residual
+\(\mathbf{r}=\mathbf{f}-\mathbf{a}\), damping \(\lambda\), step capped at
+\(40\,\mathrm{m}\). Success if RMS \(<20\,\mathrm{nT}\) and \(A>0\).
+
+\subsection{Warm start}
+If a guess \(\hat{\mathbf{t}}_{\mathrm{c}}\) (centroid) is available, use it;
+else anomaly-weighted sample centroid. Strength guess \(A\approx a(r^{3}+s^{3})\)
+from the strongest sample, or YAML \(4\times10^{5}\).
+
+\subsection{Why dipole LS works (and when)}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{Identifiability:} \(1/r^{3}\) curvature is unique enough that
+        angular diversity (spiral/orbit) plus amplitude \(A\) can be recovered.
+        A single radial pass is poorly conditioned --- that is why we spiral.
+  \item \textbf{Matched model:} plant and fitter use the \emph{same}
+        \(A/(r^{3}+s^{3})\) family \(\Rightarrow\) zero-bias in sim when
+        samples surround \(\mathbf{t}^{\star}\) (observed best \(e_{\mathrm{fix}}\approx0\)).
+  \item \textbf{Bayes vs dipole:} Bayes is robust to outliers and multi-ASV
+        fusion; dipole is precise but needs strong, geometrically diverse
+        samples. We use Bayes to \emph{get there}, dipole to \emph{score metres}.
+\end{itemize}
+
+%==============================================================================
+\section{How the other ASV uses dipole / belief (peer verify)}
+%==============================================================================
+
+\begin{enumerate}[leftmargin=*]
+  \item Discoverer finishes spiral, declares \textbf{centroid}
+        \((c_x,c_y,p)\) on \texttt{/swarm/verify/declare}.
+  \item \texttt{verify\_coordinator} assigns a \emph{different} ASV
+        (\texttt{prefer\_other\_verifier: true}).
+  \item Verifier flies an orbit about the candidate (radius \(\le20\,\mathrm{m}\),
+        inland-capped) approaching from the opposite side.
+  \item Each anomaly sample counts as a confirmation iff
+        \emph{all} hold (\texttt{verify\_core}):
+        at-site \(\le30\,\mathrm{m}\), peak within \(50\,\mathrm{m}\) of
+        candidate, \(a_{\mathrm{cl}}\ge15\,\mathrm{nT}\), \(p^{\star}\ge0.30\).
+  \item Need 4 confirms \(\to\) COMPLETE. Meanwhile dipole LS keeps updating
+        from \emph{all} ASV samples (shared buffer in \texttt{bayes\_fusion}).
+\end{enumerate}
+So the peer does \textbf{not} run a different physics law. It re-samples the
+same inverse-cube field and the same Bayes map from a new geometry --- that is
+the statistical independence that makes verify meaningful.
+
+%==============================================================================
+\section{Parameter catalog (how it is modelled)}
+%==============================================================================
+
+\begin{center}
+\small
+\begin{tabular}{@{}llp{7.2cm}@{}}
+\toprule
+\textbf{Symbol / YAML} & \textbf{Value} & \textbf{Meaning} \\
+\midrule
+\(\Delta\), \texttt{cell\_size\_m} & \(10\,\mathrm{m}\) & Bayes cell \\
+map size / origin & \(300\,\mathrm{m}\), \((-150,-150)\) & Lake grid \\
+\(P_{\mathrm{bg}},P_{\max}\) & \(0.05,0.95\) & FA floor / max \(P_{\mathrm{det}}\) \\
+\(d_{1/2}\) & \(30\,\mathrm{m}\) & Range where \(P_{\mathrm{det}}\) is mid \\
+\(\tau_{\mathrm{hit}},\tau_{\mathrm{miss}}\) & \(15,5\,\mathrm{nT}\) & HIT/MISS gates \\
+\texttt{hit\_only} & true & Ignore MISS updates \\
+centroid frac & \(0.5\) & High-prob blob cutoff \\
+\(A,s\) plant+fit & \(4\times10^{5}\), \(20\,\mathrm{m}\) & Dipole amplitude/soft \\
+dipole min \(a\), \(n\) & \(10\,\mathrm{nT}\), \(12\) & LS buffer gate \\
+MI radii / angles & \(10,20,30\,\mathrm{m}\), \(16\) & Hunt candidates \\
+MI replan & \(5\,\mathrm{s}\) & Hunt rate \\
+enter TARGET \(p^{\star}\) & \(0.25\times4\) ticks & Leave lawnmower \\
+spiral max / inset & \(80\), \(10\,\mathrm{m}\) & Inland densify \\
+verify \(n\) / orbit & \(4\), \(20\,\mathrm{m}\) & Peer confirm \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\paragraph{How to retune (engineering).}
+Raise \(\tau_{\mathrm{hit}}\) \(\to\) fewer false HITs, slower detect.
+Raise \(d_{1/2}\) \(\to\) longer-range belief influence (more smeared blob).
+Smaller \(\Delta\) \(\to\) finer peak, more CPU. Larger MI radii \(\to\) bolder
+hunt steps. Dipole \(s\) must match plant or LS is biased.
+
+%==============================================================================
+\section{End-to-end consistency argument}
+%==============================================================================
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Physics \(\to\) likelihood:} \(B\propto 1/r^{3}\) \(\Rightarrow\)
+        \(P_{\mathrm{det}}\) uses the same exponent.
+  \item \textbf{Likelihood \(\to\) Bayes:} HIT update is Bayes' rule on a
+        categorical \(T\); \(b\) remains a valid PMF.
+  \item \textbf{Bayes \(\to\) MI:} MI uses the \emph{same} \(P_{\mathrm{det}}\)
+        to predict \(b'\); planner is Bayes-optimal for one-step entropy.
+  \item \textbf{Samples \(\to\) dipole:} LS inverts the \emph{same} \(A/(r^{3}+s^{3})\)
+        used to generate \(a\) in sim \(\Rightarrow\) consistent estimator.
+  \item \textbf{Peer ASV:} independent pose, same field, same \(b\) and LS
+        buffer \(\Rightarrow\) geometric diversity + confirmation.
+\end{enumerate}
+This chain is why we can tell others: ``it is not three unrelated hacks; it is
+one inverse-cube world model used as plant, likelihood, planner, and fitter.''
+
+%==============================================================================
+\section{Study questions (for explaining to others)}
+%==============================================================================
+\begin{enumerate}[leftmargin=*]
+  \item Why \(1/r^{3}\) and not \(1/r^{2}\)? (dipole vs monopole)
+  \item What does \(s\) do at \(r=0\)? (finite peak \(A/s^{3}\))
+  \item Write one HIT Bayes update for two cells. Which cell grows?
+  \item Why HIT-only? What would aggressive MISS updates do far from the target?
+  \item Show \(I(T;Z)\ge 0\). When is \(I=0\)?
+  \item Why rings of \(10/20/30\,\mathrm{m}\) instead of full-lake MI?
+  \item Why spiral before dipole LS? (angular diversity / conditioning)
+  \item Difference between peak cell, centroid, and dipole fix?
+  \item Why can ASV1 verify a target ASV3 discovered? (shared \(b\), shared field)
+  \item If \(\tau_{\mathrm{hit}}\) were \(3\,\mathrm{nT}\) (noise level), what
+        fails? (false HITs, wrong blob, early false COMPLETE)
+\end{enumerate}
+
+%==============================================================================
+\section{Code map}
+%==============================================================================
+\begin{center}
+\begin{tabular}{@{}ll@{}}
+\toprule
+Algorithm & File \\
+\midrule
+\(P_{\mathrm{det}}\), Bayes HIT/MISS, centroid & \texttt{boat\_mapping/bayes\_core.py} \\
+Fusion node + dipole buffer & \texttt{boat\_mapping/bayes\_fusion.py} \\
+LM dipole fit + Jacobians & \texttt{boat\_mapping/dipole\_fit.py} \\
+Plant dipole & \texttt{boat\_sensing/dipole.py} \\
+MI planner & \texttt{boat\_mission/info\_gain.py} \\
+FSM / declare / verify & \texttt{mission\_manager.py}, \texttt{verify\_core.py} \\
+Parameters & \texttt{mapping.yaml}, \texttt{mission.yaml}, \texttt{sensing.yaml} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{thebibliography}{9}
+\bibitem{shannon} C.~E.~Shannon, ``A mathematical theory of communication,''
+\emph{Bell Syst.\ Tech.\ J.}, 1948.
+\bibitem{lm} K.~Levenberg, ``A method for the solution of certain non-linear
+problems in least squares,'' \emph{Q.\ Appl.\ Math.}, 1944.
+\bibitem{stone} L.~D.~Stone, \emph{Theory of Optimal Search}, 1975.
+\bibitem{fossen} T.~I.~Fossen, \emph{Handbook of Marine Craft Hydrodynamics and
+Motion Control}, Wiley, 2011.
+\bibitem{ros2} Open Robotics, ROS~2 Jazzy documentation.
+\end{thebibliography}
+
+\end{document}

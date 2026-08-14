@@ -1,0 +1,29 @@
+\chapter{Acceptance, oscillation, and scoring}
+\label{ch:accept}
+
+\section{There is no onboard ``error $<5\,\mathrm{m}$ countdown''}
+Robots do not receive the planted ground-truth pose. Completion is gated by:
+\begin{enumerate}[leftmargin=*]
+  \item consecutive high peak probability (enter hunt);
+  \item spiral minimum duration (declare);
+  \item verification confirmation count (COMPLETE);
+  \item optional dipole residual quality (publish fix).
+\end{enumerate}
+
+\section{Why the estimate oscillates then settles}
+The discrete peak lives on a \(10\,\mathrm{m}\) grid. Early HITs create a ridge
+of plausible cells; \(\arg\max\) jumps among neighbours. The centroid is
+smoother; the dipole least-squares fix usually becomes the stable few-metre
+estimate after spiral/verify angular diversity.
+
+\section{How to score $<5\,\mathrm{m}$ for a competition}
+Offline (or judge script), compare
+\texttt{/swarm/belief/fix} (and centroid) to the planted
+\((t_x,t_y)\). Report final error at COMPLETE and time spent below
+\(5\,\mathrm{m}\). Do not claim the vehicle waited on that threshold unless you
+add an external scoring node.
+
+\section{Operator confirmation UX}
+When verify succeeds, the plotter status strip switches to green
+\textbf{CONFIRMED} and shows verifier id and confirmation count --- that is the
+human-visible ``yes, verification phase finished successfully'' signal.

@@ -41,9 +41,18 @@ class BayesFusionNode(Node):
         self.declare_parameter('hit_only', True)
         # Cells with belief >= threshold_frac * peak_belief form the centroid region.
         self.declare_parameter('centroid_threshold_frac', 0.5)
-        # Dipole least-squares refinement (same soft length as mag_driver).
+        # Dipole least-squares refinement (same plant as mag_driver).
         self.declare_parameter('dipole_fit_enable', True)
+        self.declare_parameter('dipole_model', 'scalar_soft')
         self.declare_parameter('dipole_soft_m', 20.0)
+        self.declare_parameter('dipole_fit_target_z', -1.0)
+        self.declare_parameter('dipole_fit_sensor_z', 0.0)
+        self.declare_parameter('dipole_fit_free_depth', False)
+        self.declare_parameter('dipole_fit_free_moment', False)
+        self.declare_parameter('earth_inclination_deg', 15.0)
+        self.declare_parameter('earth_declination_deg', -1.0)
+        self.declare_parameter('earth_total_nt', 45000.0)
+        self.declare_parameter('dipole_fit_guess_peak_nt', 50.0)
         self.declare_parameter('dipole_fit_min_anomaly_nt', 10.0)
         self.declare_parameter('dipole_fit_min_samples', 12)
         self.declare_parameter('dipole_fit_max_samples', 400)
@@ -69,6 +78,12 @@ class BayesFusionNode(Node):
         self.dipole_guess_strength = float(
             self.get_parameter('dipole_fit_guess_strength_nt').value
         )
+        self.dipole_guess_peak = float(
+            self.get_parameter('dipole_fit_guess_peak_nt').value
+        )
+        self.dipole_model = str(
+            self.get_parameter('dipole_model').value
+        ).strip().lower()
 
         self.belief_map = BeliefMap(
             area_size_m=float(self.get_parameter('area_size_m').value),
@@ -89,6 +104,19 @@ class BayesFusionNode(Node):
             ),
             min_samples=int(self.get_parameter('dipole_fit_min_samples').value),
             max_samples=int(self.get_parameter('dipole_fit_max_samples').value),
+            dipole_model=self.dipole_model,
+            target_z=float(self.get_parameter('dipole_fit_target_z').value),
+            sensor_z=float(self.get_parameter('dipole_fit_sensor_z').value),
+            earth_inclination_deg=float(
+                self.get_parameter('earth_inclination_deg').value
+            ),
+            earth_declination_deg=float(
+                self.get_parameter('earth_declination_deg').value
+            ),
+            earth_total_nt=float(self.get_parameter('earth_total_nt').value),
+            free_depth=bool(self.get_parameter('dipole_fit_free_depth').value),
+            free_moment=bool(self.get_parameter('dipole_fit_free_moment').value),
+            guess_peak_nt=self.dipole_guess_peak,
         )
         self.latest_fix = None
 
@@ -117,7 +145,8 @@ class BayesFusionNode(Node):
             f'grid={self.belief_map.width}x{self.belief_map.height}, '
             f'hit>={self.belief_map.hit_threshold_nt:.3g} nT, '
             f'centroid_frac={self.centroid_threshold_frac:.2f}, '
-            f'dipole_fit={"on" if self.dipole_fit_enable else "off"}'
+            f'dipole_fit={"on" if self.dipole_fit_enable else "off"} '
+            f'model={self.dipole_model}'
         )
 
     def on_anomaly(self, msg):
@@ -163,6 +192,7 @@ class BayesFusionNode(Node):
         fix = self.fitter.fit(
             guess_xy=(centroid.x, centroid.y),
             guess_strength_nt=self.dipole_guess_strength,
+            guess_peak_nt=self.dipole_guess_peak,
         )
         if fix is not None and fix.success:
             self.latest_fix = fix
@@ -217,6 +247,7 @@ class BayesFusionNode(Node):
             fpose.header.frame_id = 'map'
             fpose.pose.position.x = self.latest_fix.x
             fpose.pose.position.y = self.latest_fix.y
+            fpose.pose.position.z = float(self.latest_fix.z)
             fpose.pose.orientation.w = 1.0
             self.fix_pub.publish(fpose)
 

@@ -20,6 +20,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 ASV_SPECS = (
     {'ns': 'asv1', 'model': 'simple_boat'},
     {'ns': 'asv2', 'model': 'simple_boat_2'},
+    {'ns': 'asv3', 'model': 'simple_boat_3'},
 )
 
 
@@ -237,8 +238,8 @@ def _asv_stack(
                     'fix_topic': '/swarm/belief/fix',
                     'fix_rms_topic': '/swarm/belief/fix_rms',
                     'show_true_target': True,
-                    'target_x': 55.0,
-                    'target_y': -35.0,
+                    'target_x': 0.0,
+                    'target_y': -85.0,
                     'lake_half_size_m': 150.0,
                     'anomaly_vmax_nt': 55.0,
                     'anomaly_hit_threshold_nt': 15.0,
@@ -254,7 +255,7 @@ def _asv_stack(
 
 
 def _multi_asv_nodes(context, *args):
-    """Instantiate one or two ASV stacks from num_asvs."""
+    """Instantiate one to three ASV stacks from num_asvs."""
     bringup_share = get_package_share_directory('boat_bringup')
     navigation_config = os.path.join(bringup_share, 'config', 'navigation.yaml')
     sensing_config = os.path.join(bringup_share, 'config', 'sensing.yaml')
@@ -262,8 +263,8 @@ def _multi_asv_nodes(context, *args):
     mission_config = os.path.join(bringup_share, 'config', 'mission.yaml')
 
     num_asvs = int(LaunchConfiguration('num_asvs').perform(context))
-    if num_asvs not in (1, 2):
-        raise ValueError('num_asvs must be 1 or 2')
+    if num_asvs not in (1, 2, 3):
+        raise ValueError('num_asvs must be 1, 2, or 3')
 
     fast = LaunchConfiguration('fast')
     use_sim_time = {
@@ -323,8 +324,8 @@ def _multi_asv_nodes(context, *args):
                     'fix_topic': '/swarm/belief/fix',
                     'fix_rms_topic': '/swarm/belief/fix_rms',
                     'show_true_target': True,
-                    'target_x': 55.0,
-                    'target_y': -35.0,
+                    'target_x': 0.0,
+                    'target_y': -85.0,
                     'lake_half_size_m': 150.0,
                     'anomaly_vmax_nt': 55.0,
                     'anomaly_hit_threshold_nt': 15.0,
@@ -401,7 +402,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'num_asvs',
             default_value='1',
-            description='Number of independent ASV stacks to launch (1 or 2).',
+            description='Number of independent ASV stacks to launch (1, 2, or 3).',
         ),
         DeclareLaunchArgument(
             'fast',

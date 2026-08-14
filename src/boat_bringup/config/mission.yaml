@@ -14,24 +14,32 @@
     calibration_status_topic: calibration/status
     peak_topic: /swarm/belief/peak
     peak_probability_topic: /swarm/belief/peak_probability
+    centroid_topic: /swarm/belief/centroid
     belief_map_topic: /swarm/belief/map
     declare_topic: /swarm/verify/declare
     verify_request_topic: /swarm/verify/request
     verify_result_topic: /swarm/verify/result
     halt_topic: /swarm/mission/halt
 
-    # Coverage box inset from 300 m lake shoreline
-    min_x: -120.0
-    max_x: 120.0
-    min_y: -120.0
-    max_y: 120.0
-    lawnmower_spacing: 20.0
+    # Coverage box inset from 1000 m lake shoreline
+    min_x: -450.0
+    max_x: 450.0
+    min_y: -450.0
+    max_y: 450.0
+    # Wider swath on the 1 km lake (matches offline Python ~50 m style).
+    lawnmower_spacing: 50.0
+    # Multi-ASV: Voronoi geographic regions (default). 'lanes' = interleaved Y.
+    lawnmower_asv_index: 0
+    lawnmower_num_asvs: 1
+    lawnmower_partition: voronoi
+    # SW / SE / NE shoreline corner launches (up to 3 ASVs).
+    region_seeds: [-450.0, -450.0, 450.0, -450.0, 450.0, 450.0]
     control_rate_hz: 2.0
 
     # Mode switch GLOBAL_SEARCH → TARGET_SEARCH
     p_enter_target_search: 0.25
     consecutive_high_p_required: 4
-    peak_near_asv_radius_m: 150.0
+    peak_near_asv_radius_m: 400.0
     min_seconds_before_switch: 20.0
     require_calibration_ready: true
     force_target_search: false
@@ -58,7 +66,8 @@
     spiral_complete_peak_p: 0.25
     spiral_complete_radius_m: 40.0
 
-    # VERIFY (Phase 8) — single ASV self-verifies by default
+    # VERIFY (Phase 8) — single ASV self-verifies by default.
+    # Launch overrides to false when num_asvs > 1 (cooperative Phase 4).
     self_verify: true
     verify_orbit_radius_m: 20.0
     verify_orbit_points: 12
@@ -75,5 +84,5 @@ verify_coordinator:
     result_topic: /swarm/verify/result
     complete_topic: /swarm/mission/complete
     halt_topic: /swarm/mission/halt
-    known_asvs: ['asv1']
+    known_asvs: ['asv1', 'asv2', 'asv3']
     prefer_other_verifier: true

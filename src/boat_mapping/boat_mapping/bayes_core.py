@@ -29,6 +29,16 @@ class BeliefPeak:
     cell_y: int
 
 
+@dataclass
+class BeliefCentroid:
+    """Belief-weighted centre of the high-probability region."""
+    x: float
+    y: float
+    mass: float  # total probability inside the selected region (0..1)
+    num_cells: int
+    spread_m: float  # belief-weighted RMS radius (positional uncertainty)
+
+
 class BeliefMap:
     """Uniform-prior grid belief updated by HIT/MISS observations."""
 
@@ -93,6 +103,48 @@ class BeliefMap:
             cell_x=i,
             cell_y=j,
         )
+
+    def weighted_centroid(self, threshold_frac=0.5):
+        """Belief-weighted centroid over cells >= threshold_frac * peak belief.
+
+        Selecting the "high-probability region" (cells within a fraction of the
+        peak) and averaging their positions weighted by belief yields a
+        sub-cell estimate that is smoother and more accurate than the single
+        argmax cell. Returns a BeliefCentroid with the region mass and a
+        belief-weighted RMS spread as a positional-uncertainty proxy.
+        """
+        frac = min(max(float(threshold_frac), 0.0), 1.0)
+        max_b = max(self.belief) if self.belief else 0.0
+        if max_b <= 0.0:
+            peak = self.peak()
+            return BeliefCentroid(peak.x, peak.y, 0.0, 0, 0.0)
+
+        cutoff = frac * max_b
+        sum_w = 0.0
+        sum_x = 0.0
+        sum_y = 0.0
+        selected = []
+        for j in range(self.height):
+            for i in range(self.width):
+                b = self.belief[self.index(i, j)]
+                if b >= cutoff:
+                    cx, cy = self.cell_center(i, j)
+                    sum_w += b
+                    sum_x += b * cx
+                    sum_y += b * cy
+                    selected.append((cx, cy, b))
+
+        if sum_w <= 0.0:
+            peak = self.peak()
+            return BeliefCentroid(peak.x, peak.y, 0.0, 0, 0.0)
+
+        mean_x = sum_x / sum_w
+        mean_y = sum_y / sum_w
+        var = 0.0
+        for cx, cy, b in selected:
+            var += b * ((cx - mean_x) ** 2 + (cy - mean_y) ** 2)
+        spread = math.sqrt(var / sum_w)
+        return BeliefCentroid(mean_x, mean_y, sum_w, len(selected), spread)
 
     def update(self, x, y, anomaly_nt, is_calibrated=True):
         """Update belief from one MagAnomaly sample. Returns observation label."""

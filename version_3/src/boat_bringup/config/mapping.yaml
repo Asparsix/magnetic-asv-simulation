@@ -1,6 +1,6 @@
 bayes_fusion:
   ros__parameters:
-    anomaly_topics: ['/asv1/mag/anomaly', '/asv2/mag/anomaly']
+    anomaly_topics: ['/asv1/mag/anomaly', '/asv2/mag/anomaly', '/asv3/mag/anomaly']
     map_topic: /swarm/belief/map
     peak_topic: /swarm/belief/peak
     peak_probability_topic: /swarm/belief/peak_probability
@@ -15,20 +15,30 @@ bayes_fusion:
     p_bg: 0.05
     p_max: 0.95
     d_half: 30.0
-    # Realistic magnetometry: noise ~3 nT, peak 50 nT overhead (~25 nT at the
-    # 20 m sweep). HIT at 15 nT (~5-sigma); MISS below (unused while hit_only).
+    # Noise ~3 nT, peak 50 nT, s=11.5 m (full ΔF): ~14 nT @10 m,
+    # HIT≥15 nT at 5 m lawnmower offset (10 m spacing).
     hit_threshold_nt: 15.0
     miss_threshold_nt: 5.0
     hit_only: true
     # High-probability region for the weighted centroid = cells with
     # belief >= 0.5 * peak_belief. Lower = wider blob, higher = tighter.
     centroid_threshold_frac: 0.5
-    # Dipole least-squares refinement: fit A/(r^3+soft^3) to strong samples.
+    # Dipole NLS refinement: total_field fits (tx,ty[,tz],m); scalar_soft
+    # keeps the legacy A/(r^3+soft^3) 2D fit. Bayes/MI still use |a| only.
     fix_topic: /swarm/belief/fix
     fix_rms_topic: /swarm/belief/fix_rms
     fix_samples_topic: /swarm/belief/fix_samples
     dipole_fit_enable: true
-    dipole_soft_m: 20.0
+    dipole_model: total_field
+    dipole_fit_target_z: -1.0
+    dipole_fit_sensor_z: 0.0
+    dipole_fit_free_depth: false
+    dipole_fit_free_moment: false
+    earth_inclination_deg: 15.0
+    earth_declination_deg: -1.0
+    earth_total_nt: 45000.0
+    dipole_fit_guess_peak_nt: 50.0
+    dipole_soft_m: 11.5
     dipole_fit_min_anomaly_nt: 10.0
     dipole_fit_min_samples: 12
     dipole_fit_max_samples: 400

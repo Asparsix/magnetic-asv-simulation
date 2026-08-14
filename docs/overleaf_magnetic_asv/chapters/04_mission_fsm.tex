@@ -1,0 +1,60 @@
+\chapter{Mission finite-state machine and verify handshake}
+\label{ch:fsm}
+
+\section{Modes published on \texttt{mission/state}}
+\begin{center}
+\begin{tabular}{@{}lll@{}}
+\toprule
+\texttt{mode} & \texttt{hunt\_phase} & Meaning \\
+\midrule
+\texttt{GLOBAL\_SEARCH} & (empty) & Regional strip lawnmower \\
+\texttt{TARGET\_SEARCH} & \texttt{INFO\_GAIN} & MI surfing \\
+\texttt{TARGET\_SEARCH} & \texttt{SPIRAL} & Densify samples (inland-capped) \\
+\texttt{HOLD} & (empty) & Discoverer waits / non-verifier clears path \\
+\texttt{VERIFY} & (empty) & Orbit + confirmations \\
+\texttt{COMPLETE} & (empty) & Done / halted \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Transition conditions (parameter names)}
+\begin{itemize}[leftmargin=*]
+  \item \textbf{GLOBAL $\rightarrow$ TARGET:} calibration READY (if required);
+        \(t\ge\texttt{min\_seconds\_before\_switch}\) (20\,s); for
+        \texttt{consecutive\_high\_p\_required}=4 ticks,
+        \(p^\star\ge\texttt{p\_enter\_target\_search}=0.25\) and estimate within
+        \texttt{peak\_near\_asv\_radius\_m}=150\,m.
+  \item \textbf{INFO\_GAIN $\rightarrow$ SPIRAL:} step budget (45), MI collapse,
+        proximity to estimate (\(\le25\,\mathrm{m}\)), or high \(p^\star\) near estimate.
+  \item \textbf{SPIRAL $\rightarrow$ HOLD + declare:} after
+        \texttt{spiral\_min\_duration\_s}=45\,s with peak/proximity gates (or
+        $2\times$ fallback). Publishes empty \texttt{plan} (hard stop).
+  \item \textbf{HOLD $\rightarrow$ VERIFY:} matching
+        \texttt{/swarm/verify/request} for this \texttt{asv\_id}. Multi-ASV sets
+        \texttt{self\_verify: false} so the discoverer does not self-orbit;
+        launch forces \texttt{self\_verify:=true} only when \texttt{num\_asvs}=1.
+  \item \textbf{Non-verifier $\rightarrow$ HOLD:} any verify request assigned to
+        another boat clears our path so we do not pile into the same spiral.
+  \item \textbf{VERIFY $\rightarrow$ COMPLETE:} confirmation count reaches
+        \texttt{verify\_confirmations\_required}=4
+        (at-site \(\le30\,\mathrm{m}\), peak aligned \(\le50\,\mathrm{m}\),
+        anomaly \(\ge15\,\mathrm{nT}\), \(p^\star\ge0.30\)).
+\end{itemize}
+
+\section{Handshake topics}
+\begin{enumerate}[leftmargin=*]
+  \item Discoverer $\rightarrow$ \texttt{/swarm/verify/declare}
+        (\texttt{VerifyRequest}, verifier\_id empty).
+  \item Coordinator $\rightarrow$ \texttt{/swarm/verify/request}
+        (fills \texttt{verifier\_id}, prefers other ASV).
+  \item Verifier $\rightarrow$ \texttt{/swarm/verify/result}
+        (\texttt{VerifyResult}).
+  \item Coordinator $\rightarrow$ \texttt{/swarm/mission/complete} and
+        \texttt{/swarm/mission/halt} (latched TRANSIENT\_LOCAL).
+\end{enumerate}
+
+\section{Plotter status strip}
+The trajectory plotter banner mirrors this FSM for operators:
+SEARCH / HUNT / VERIFY (with \(n/N\) confirmations) / CONFIRMED.
+CONFIRMED is a \emph{software} latch; offline localisation error vs the planted
+target is scored separately from \texttt{/swarm/belief/fix}.
