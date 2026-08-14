@@ -15,6 +15,7 @@ from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
+import yaml
 
 
 ASV_SPECS = (
@@ -26,6 +27,18 @@ ASV_SPECS = (
 
 def _as_bool(value):
     return str(value).strip().lower() in ('1', 'true', 'yes', 'on')
+
+
+def _load_trial_params(context):
+    """Optional Monte Carlo trial overrides (YAML dict)."""
+    path = LaunchConfiguration('trial_params_file').perform(context).strip()
+    if not path:
+        return {}
+    with open(path, encoding='utf-8') as handle:
+        data = yaml.safe_load(handle) or {}
+    if not isinstance(data, dict):
+        raise RuntimeError(f'trial_params_file must be a YAML mapping: {path}')
+    return data
 
 
 def _fast_world_sdf(sdf, factor, step_size):
@@ -98,8 +111,13 @@ def _asv_stack(
     enable_mission,
     enable_verify_coordinator,
     enable_plotter,
+    trial_params=None,
 ):
     """Build the per-ASV control / sensing / optional mission nodes."""
+    trial_params = trial_params or {}
+    mag_overrides = dict(trial_params.get('mag_driver', {}))
+    mission_overrides = dict(trial_params.get('mission_manager', {}))
+    nav_overrides = dict(trial_params.get('los_path_follower', {}))
     nodes = [
         Node(
             package='boat_control',
@@ -136,6 +154,7 @@ def _asv_stack(
                 navigation_config,
                 use_sim_time,
                 {'use_builtin_path': False},
+                nav_overrides,
             ],
             output='screen',
             condition=IfCondition(PythonExpression([
@@ -147,7 +166,7 @@ def _asv_stack(
             executable='los_path_follower',
             name='los_path_follower',
             namespace=asv_ns,
-            parameters=[navigation_config, use_sim_time],
+            parameters=[navigation_config, use_sim_time, nav_overrides],
             output='screen',
             condition=IfCondition(PythonExpression([
                 "'", autonomy, "' == 'true' and '", mission, "' == 'false'",
@@ -162,6 +181,7 @@ def _asv_stack(
                 sensing_config,
                 use_sim_time,
                 {'frame_id': f'{asv_ns}/mag_link'},
+                mag_overrides,
             ],
             output='screen',
             condition=IfCondition(sensing),
@@ -200,6 +220,7 @@ def _asv_stack(
                         'lawnmower_asv_index': lawnmower_asv_index,
                         'lawnmower_num_asvs': lawnmower_num_asvs,
                         'self_verify': self_verify,
+                        **mission_overrides,
                     },
                 ],
                 output='screen',
@@ -266,6 +287,10 @@ def _multi_asv_nodes(context, *args):
     if num_asvs not in (1, 2, 3):
         raise ValueError('num_asvs must be 1, 2, or 3')
 
+    trial_params = _load_trial_params(context)
+    mapping_overrides = dict(trial_params.get('bayes_fusion', {}))
+    plotter_overrides = dict(trial_params.get('plotter', {}))
+
     fast = LaunchConfiguration('fast')
     use_sim_time = {
         'use_sim_time': ParameterValue(fast, value_type=bool),
@@ -301,35 +326,38 @@ def _multi_asv_nodes(context, *args):
                 # Single boat keeps its own namespaced plotter; multi-ASV uses
                 # one shared plotter (added below) that draws every boat.
                 enable_plotter=(index == 0 and num_asvs == 1),
+                trial_params=trial_params,
             )
         )
 
     if num_asvs > 1:
         namespaces = [spec['ns'] for spec in ASV_SPECS[:num_asvs]]
+        plotter_params = {
+            'asv_namespaces': namespaces,
+            'pose_topic': 'pose2d',
+            'trajectory_topic': 'trajectory',
+            'active_plan_topic': 'plan/active',
+            'anomaly_topic': 'mag/anomaly',
+            'peak_topic': '/swarm/belief/peak',
+            'peak_probability_topic': '/swarm/belief/peak_probability',
+            'centroid_topic': '/swarm/belief/centroid',
+            'centroid_spread_topic': '/swarm/belief/centroid_spread',
+            'fix_topic': '/swarm/belief/fix',
+            'fix_rms_topic': '/swarm/belief/fix_rms',
+            'show_true_target': True,
+            'target_x': 0.0,
+            'target_y': -85.0,
+            'lake_half_size_m': 150.0,
+            'anomaly_vmax_nt': 55.0,
+            'anomaly_hit_threshold_nt': 15.0,
+            **plotter_overrides,
+        }
         nodes.append(
             Node(
                 package='boat_navigation',
                 executable='trajectory_plotter',
                 name='trajectory_plotter',
-                parameters=[{
-                    'asv_namespaces': namespaces,
-                    'pose_topic': 'pose2d',
-                    'trajectory_topic': 'trajectory',
-                    'active_plan_topic': 'plan/active',
-                    'anomaly_topic': 'mag/anomaly',
-                    'peak_topic': '/swarm/belief/peak',
-                    'peak_probability_topic': '/swarm/belief/peak_probability',
-                    'centroid_topic': '/swarm/belief/centroid',
-                    'centroid_spread_topic': '/swarm/belief/centroid_spread',
-                    'fix_topic': '/swarm/belief/fix',
-                    'fix_rms_topic': '/swarm/belief/fix_rms',
-                    'show_true_target': True,
-                    'target_x': 0.0,
-                    'target_y': -85.0,
-                    'lake_half_size_m': 150.0,
-                    'anomaly_vmax_nt': 55.0,
-                    'anomaly_hit_threshold_nt': 15.0,
-                }],
+                parameters=[plotter_params],
                 output='screen',
                 condition=IfCondition(PythonExpression([
                     "'", plot_trajectory, "' == 'true' and '",
@@ -343,7 +371,7 @@ def _multi_asv_nodes(context, *args):
             package='boat_mapping',
             executable='bayes_fusion',
             name='bayes_fusion',
-            parameters=[mapping_config, use_sim_time],
+            parameters=[mapping_config, use_sim_time, mapping_overrides],
             output='screen',
             condition=IfCondition(mapping),
         )
@@ -422,6 +450,14 @@ def generate_launch_description():
             default_value='0.002',
             description=(
                 'Physics integration step in fast mode (0.001-0.004 seconds).'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'trial_params_file',
+            default_value='',
+            description=(
+                'Optional YAML file with per-trial overrides for Monte Carlo '
+                '(mag_driver, mission_manager, bayes_fusion, plotter).'
             ),
         ),
         SetEnvironmentVariable('GZ_SIM_RESOURCE_PATH', resource_path),

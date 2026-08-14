@@ -1,0 +1,32 @@
+# Default Monte Carlo sampling ranges for monte_carlo_run.py
+#
+# Target (x, y) is sampled inside the 3 lawnmower strips only (not 20 m gaps).
+# y may fall between lawnmower rows (e.g. y=-85 between -90/-80 tracks).
+
+coverage_min_x: -120.0
+coverage_max_x: 120.0
+coverage_min_y: -120.0
+coverage_max_y: 120.0
+num_asvs: 3
+strip_gap_m: 20.0
+strip_inset_m: 0.0
+
+target_y:
+  min: -110.0
+  max: -40.0
+target_z:
+  min: -2.0
+  max: -0.5
+synthetic_noise_nt:
+  min: 1.0
+  max: 8.0
+dipole_peak_nt:
+  min: 40.0
+  max: 60.0
+moment_tilt_max_deg: 45.0
+moment_magnitude_jitter: 0.2
+spawn_y_jitter_m: 15.0
+mag_baseline_drift_nt_per_min:
+  min: 0.0
+  max: 2.0
+mag_baseline_drift_vertical_fraction: 0.15

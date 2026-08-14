@@ -21,6 +21,14 @@ def generate_launch_description():
         DeclareLaunchArgument('headless', default_value='false'),
         DeclareLaunchArgument('fast', default_value='true'),
         DeclareLaunchArgument('plot_trajectory', default_value='true'),
+        DeclareLaunchArgument(
+            'trial_params_file',
+            default_value='',
+            description=(
+                'Optional YAML overrides (mag_driver target, bayes_fusion, '
+                'plotter). Used by run_demo_gui.sh and Monte Carlo.'
+            ),
+        ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(sim_launch),
             launch_arguments={
@@ -34,6 +42,7 @@ def generate_launch_description():
                 'plot_trajectory': LaunchConfiguration('plot_trajectory'),
                 'fast_factor': '5.0',
                 'fast_step_size': '0.003',
+                'trial_params_file': LaunchConfiguration('trial_params_file'),
             }.items(),
         ),
     ])

@@ -53,6 +53,7 @@ class MagDriver(Node):
         # Inflated units matching Gazebo-as-Tesla conversion (~0.45 "T" → 4.5e8 nT).
         self.declare_parameter('synthetic_background_nt', 4.5e8)
         self.declare_parameter('synthetic_noise_nt', 5.0e4)
+        self.declare_parameter('random_seed', 0)
 
         rate_hz = float(self.get_parameter('publish_rate_hz').value)
         gazebo_mag_topic = self.get_parameter('gazebo_mag_topic').value
@@ -106,6 +107,9 @@ class MagDriver(Node):
         self.synthetic_noise_nt = float(
             self.get_parameter('synthetic_noise_nt').value
         )
+        seed = int(self.get_parameter('random_seed').value)
+        if seed != 0:
+            random.seed(seed)
 
         self.latest_mag = None
         self.latest_pose = None

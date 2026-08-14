@@ -1,0 +1,29 @@
+mag_driver:
+  target_x: -1.2427721352640262
+  target_y: -49.47447241788492
+  target_z: -0.6463357017341771
+  dipole_peak_nt: 40.04310756702853
+  dipole_mx: -72575.70822687524
+  dipole_my: 16284.538885837725
+  dipole_mz: -83502.1659071877
+  dipole_soft_m: 11.5
+  synthetic_noise_nt: 2.152459849810688
+  random_seed: 1045118909
+  raw_topic: mag/plant
+mag_baseline_drift:
+  drift_nt_per_min: 1.5667230569685744
+  drift_azimuth_deg: 238.27367230226827
+  drift_vertical_fraction: 0.15
+bayes_fusion:
+  dipole_fit_target_z: -0.6463357017341771
+mission_manager:
+  region_seeds:
+  - -120.0
+  - -126.4425231315924
+  - -33.333
+  - -114.10225489199513
+  - 53.333
+  - -113.08484047753602
+plotter:
+  target_x: -1.2427721352640262
+  target_y: -49.47447241788492

@@ -1,0 +1,17 @@
+# Known-good GUI demo target: between lawnmower rows in the center strip.
+# Peak ~50 nT, modest noise, vertical-ish moment via peak sizing in mag_driver.
+mag_driver:
+  target_x: 0.0
+  target_y: -85.0
+  target_z: -1.0
+  dipole_peak_nt: 50.0
+  dipole_mx: 0.0
+  dipole_my: 0.0
+  dipole_mz: 0.0
+  dipole_soft_m: 11.5
+  synthetic_noise_nt: 3.0
+bayes_fusion:
+  dipole_fit_target_z: -1.0
+plotter:
+  target_x: 0.0
+  target_y: -85.0

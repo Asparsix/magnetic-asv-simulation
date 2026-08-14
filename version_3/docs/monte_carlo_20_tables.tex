@@ -1,0 +1,50 @@
+% Auto-generated paper snippet from monte_carlo_results_20.json
+% Fair set excludes trial 14 (host sleep timeout).
+\begin{table}[t]
+\centering
+\caption{Monte Carlo localization results (20 trials, seed 42). Trial 14 excluded as a host-sleep artifact; rates below use the fair set of 19.}
+\label{tab:mc20}
+\begin{tabular}{lr}
+\hline
+Metric & Value \\
+\hline
+Mission / verify success & 18/19 (94.7\%) \\
+Genuine timeouts & 1 \\
+Fix error mean / median / max (m) & 5.36 / 4.59 / 25.15 \\
+Centroid median (m) & 10.26 \\
+Fix $\leq 5$\,m / $\leq 10$\,m & 12/18 / 17/18 \\
+\hline
+\end{tabular}
+\end{table}
+
+\begin{table}[t]
+\centering
+\caption{Per-trial dipole-fix localization error.}
+\label{tab:mc20_trials}
+\begin{tabular}{rllrrr}
+\hline
+Trial & Status & Note & Fix (m) & Centroid (m) & Wall (s) \\
+\hline
+1 & COMPLETE &  & 3.2 & 4.3 & 289 \\
+2 & COMPLETE &  & 6.2 & 6.4 & 566 \\
+3 & COMPLETE &  & 5.4 & 16.2 & 493 \\
+4 & COMPLETE &  & 4.6 & 7.8 & 736 \\
+5 & COMPLETE &  & 5.0 & 12.9 & 553 \\
+6 & COMPLETE &  & 5.2 & 10.3 & 484 \\
+7 & COMPLETE &  & 2.5 & 2.8 & 227 \\
+8 & COMPLETE &  & 1.2 & 2.4 & 591 \\
+9 & COMPLETE &  & 4.4 & 8.0 & 437 \\
+10 & COMPLETE &  & 3.5 & 4.8 & 401 \\
+11 & COMPLETE & outlier & 25.1 & 23.3 & 498 \\
+12 & COMPLETE &  & 8.5 & 17.0 & 176 \\
+13 & COMPLETE &  & 6.8 & 11.3 & 378 \\
+14 & TIMEOUT & sleep & 363.5 & 44.3 & 7989 \\
+15 & COMPLETE &  & 3.9 & 14.8 & 533 \\
+16 & COMPLETE &  & 3.1 & 13.7 & 553 \\
+17 & COMPLETE &  & 3.0 & 2.5 & 450 \\
+18 & TIMEOUT & timeout & 22.8 & 17.1 & 1201 \\
+19 & COMPLETE &  & 4.8 & 10.3 & 242 \\
+20 & COMPLETE &  & 0.3 & 4.5 & 298 \\
+\hline
+\end{tabular}
+\end{table}

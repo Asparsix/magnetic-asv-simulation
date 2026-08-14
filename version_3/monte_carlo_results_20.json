@@ -1,0 +1,1678 @@
+{
+  "summary": {
+    "trials": 20,
+    "mission_complete_rate": 0.9,
+    "verify_success_rate": 0.9,
+    "fix_error_mean_m": 24.14196927369969,
+    "fix_error_max_m": 363.5300320020256,
+    "centroid_error_mean_m": 11.73556488716314,
+    "centroid_error_max_m": 44.322939717012275,
+    "localization_error_mean_m": 24.14196927369969,
+    "localization_error_max_m": 363.5300320020256,
+    "timeouts": 2
+  },
+  "config_file": "/home/robot/simulation_ws/version_3/install/boat_bringup/share/boat_bringup/config/monte_carlo_config.yaml",
+  "master_seed": 42,
+  "results": [
+    {
+      "trial_id": 0,
+      "random_seed": 1395616197,
+      "ground_truth": {
+        "target_x": -31.6659496518222,
+        "target_y": -90.74794771416165,
+        "target_z": -1.665183892776766,
+        "dipole_peak_nt": 53.533989748458225,
+        "dipole_mx": 5819.1866806826665,
+        "dipole_my": -10894.640452635354,
+        "dipole_mz": -180607.36403669586,
+        "synthetic_noise_nt": 6.155298499148087,
+        "mag_baseline_drift_nt_per_min": 0.05307193936772725,
+        "mag_baseline_drift_azimuth_deg": 71.58155424719345,
+        "region_seeds": [
+          -120.0,
+          -134.1060834168579,
+          -33.333,
+          -128.4408607558919,
+          53.333,
+          -119.83934135689913
+        ]
+      },
+      "launch_overrides": {
+        "mag_driver": {
+          "target_x": -31.6659496518222,
+          "target_y": -90.74794771416165,
+          "target_z": -1.665183892776766,
+          "dipole_peak_nt": 53.533989748458225,
+          "dipole_mx": 5819.1866806826665,
+          "dipole_my": -10894.640452635354,
+          "dipole_mz": -180607.36403669586,
+          "dipole_soft_m": 11.5,
+          "synthetic_noise_nt": 6.155298499148087,
+          "random_seed": 1395616197,
+          "raw_topic": "mag/plant"
+        },
+        "mag_baseline_drift": {
+          "drift_nt_per_min": 0.05307193936772725,
+          "drift_azimuth_deg": 71.58155424719345,
+          "drift_vertical_fraction": 0.15
+        },
+        "bayes_fusion": {
+          "dipole_fit_target_z": -1.665183892776766
+        },
+        "mission_manager": {
+          "region_seeds": [
+            -120.0,
+            -134.1060834168579,
+            -33.333,
+            -128.4408607558919,
+            53.333,
+            -119.83934135689913
+          ]
+        },
+        "plotter": {
+          "target_x": -31.6659496518222,
+          "target_y": -90.74794771416165
+        }
+      },
+      "mission_complete": true,
+      "mission_status": "MISSION_COMPLETE:verifier=asv1:conf=4:p=0.964",
+      "verify_success": true,
+      "verify_confirmations": 4,
+      "fix_x": -30.482843834199002,
+      "fix_y": -87.75350875150382,
+      "fix_error_m": 3.2196900591170583,
+      "fix_rms_nt": 14.981856507815714,
+      "centroid_x": -31.458160380617805,
+      "centroid_y": -95.0,
+      "centroid_error_m": 4.257126380873694,
+      "peak_x": -35.0,
+      "peak_y": -95.0,
+      "peak_error_m": 5.403317533301889,
+      "verify_candidate_x": -35.0,
+      "verify_candidate_y": -95.0,
+      "verify_candidate_error_m": 5.403317533301889,
+      "localization_error_m": 3.2196900591170583,
+      "localization_source": "fix",
+      "timed_out": false,
+      "wall_time_s": 289.25052857398987,
+      "domain_id": 50
+    },
+    {
+      "trial_id": 1,
+      "random_seed": 738639289,
+      "ground_truth": {
+        "target_x": 81.30132139744393,
+        "target_y": -78.55536676013025,
+        "target_z": -1.582713937654006,
+        "dipole_peak_nt": 55.17614734259534,
+        "dipole_mx": 44675.94624806044,
+        "dipole_my": -7904.658167386415,
+        "dipole_mz": -131631.90369485674,
+        "synthetic_noise_nt": 7.085102245550537,
+        "mag_baseline_drift_nt_per_min": 0.7598546012746747,
+        "mag_baseline_drift_azimuth_deg": 129.2325769744662,
+        "region_seeds": [
+          -120.0,
+          -128.54058713677233,
+          -33.333,
+          -112.09517612980429,
+          53.333,
+          -131.93369170440454
+        ]
+      },
+      "launch_overrides": {
+        "mag_driver": {
+          "target_x": 81.30132139744393,
+          "target_y": -78.55536676013025,
+          "target_z": -1.582713937654006,
+          "dipole_peak_nt": 55.17614734259534,
+          "dipole_mx": 44675.94624806044,
+          "dipole_my": -7904.658167386415,
+          "dipole_mz": -131631.90369485674,
+          "dipole_soft_m": 11.5,
+          "synthetic_noise_nt": 7.085102245550537,
+          "random_seed": 738639289,
+          "raw_topic": "mag/plant"
+        },
+        "mag_baseline_drift": {
+          "drift_nt_per_min": 0.7598546012746747,
+          "drift_azimuth_deg": 129.2325769744662,
+          "drift_vertical_fraction": 0.15
+        },
+        "bayes_fusion": {
+          "dipole_fit_target_z": -1.582713937654006
+        },
+        "mission_manager": {
+          "region_seeds": [
+            -120.0,
+            -128.54058713677233,
+            -33.333,
+            -112.09517612980429,
+            53.333,
+            -131.93369170440454
+          ]
+        },
+        "plotter": {
+          "target_x": 81.30132139744393,
+          "target_y": -78.55536676013025
+        }
+      },
+      "mission_complete": true,
+      "mission_status": "MISSION_COMPLETE:verifier=asv1:conf=4:p=0.888",
+      "verify_success": true,
+      "verify_confirmations": 4,
+      "fix_x": 80.04060336033814,
+      "fix_y": -72.52010855994055,
+      "fix_error_m": 6.165529296989912,
+      "fix_rms_nt": 13.137408378192806,
+      "centroid_x": 81.34508176014212,
+      "centroid_y": -85.0,
+      "centroid_error_m": 6.444781809012427,
+      "peak_x": 85.0,
+      "peak_y": -85.0,
+      "peak_error_m": 7.430580125497614,
+      "verify_candidate_x": 85.0,
+      "verify_candidate_y": -85.0,
+      "verify_candidate_error_m": 7.430580125497614,
+      "localization_error_m": 6.165529296989912,
+      "localization_source": "fix",
+      "timed_out": false,
+      "wall_time_s": 566.2591452598572,
+      "domain_id": 51
+    },
+    {
+      "trial_id": 2,
+      "random_seed": 621455911,
+      "ground_truth": {
+        "target_x": 20.47521821829202,
+        "target_y": -58.91877493143275,
+        "target_z": -1.1956578628179488,
+        "dipole_peak_nt": 47.57068754416707,
+        "dipole_mx": -58269.287621132,
+        "dipole_my": -63218.5961507576,
+        "dipole_mz": -112765.05610643342,
+        "synthetic_noise_nt": 7.8118103478555945,
+        "mag_baseline_drift_nt_per_min": 0.09164876731132443,
+        "mag_baseline_drift_azimuth_deg": 82.04337923455687,
+        "region_seeds": [
+          -120.0,
+          -109.14879299067668,
+          -33.333,
+          -117.67943564229714,
+          53.333,
+          -113.8628449135523
+        ]
+      },
+      "launch_overrides": {
+        "mag_driver": {
+          "target_x": 20.47521821829202,
+          "target_y": -58.91877493143275,
+          "target_z": -1.1956578628179488,
+          "dipole_peak_nt": 47.57068754416707,
+          "dipole_mx": -58269.287621132,
+          "dipole_my": -63218.5961507576,
+          "dipole_mz": -112765.05610643342,
+          "dipole_soft_m": 11.5,
+          "synthetic_noise_nt": 7.8118103478555945,
+          "random_seed": 621455911,
+          "raw_topic": "mag/plant"
+        },
+        "mag_baseline_drift": {
+          "drift_nt_per_min": 0.09164876731132443,
+          "drift_azimuth_deg": 82.04337923455687,
+          "drift_vertical_fraction": 0.15
+        },
+        "bayes_fusion": {
+          "dipole_fit_target_z": -1.1956578628179488
+        },
+        "mission_manager": {
+          "region_seeds": [
+            -120.0,
+            -109.14879299067668,
+            -33.333,
+            -117.67943564229714,
+            53.333,
+            -113.8628449135523
+          ]
+        },
+        "plotter": {
+          "target_x": 20.47521821829202,
+          "target_y": -58.91877493143275
+        }
+      },
+      "mission_complete": true,
+      "mission_status": "MISSION_COMPLETE:verifier=asv1:conf=4:p=0.996",
+      "verify_success": true,
+      "verify_confirmations": 4,
+      "fix_x": 15.083567632673477,
+      "fix_y": -59.0827312727437,
+      "fix_error_m": 5.394142908679456,
+      "fix_rms_nt": 5.227822800831353,
+      "centroid_x": 18.744915019696965,
+      "centroid_y": -75.0,
+      "centroid_error_m": 16.174045531807558,
+      "peak_x": 15.0,
+      "peak_y": -75.0,
+      "peak_error_m": 16.987754832344166,
+      "verify_candidate_x": 15.000000000000002,
+      "verify_candidate_y": -75.0,
+      "verify_candidate_error_m": 16.987754832344166,
+      "localization_error_m": 5.394142908679456,
+      "localization_source": "fix",
+      "timed_out": false,
+      "wall_time_s": 493.4245276451111,
+      "domain_id": 52
+    },
+    {
+      "trial_id": 3,
+      "random_seed": 525727462,
+      "ground_truth": {
+        "target_x": 110.35451473434314,
+        "target_y": -49.346143327131124,
+        "target_z": -1.4298106624412508,
+        "dipole_peak_nt": 56.68220853281501,
+        "dipole_mx": -34558.65571447697,
+        "dipole_my": -18949.278638966716,
+        "dipole_mz": -137565.2285034114,
+        "synthetic_noise_nt": 4.173872116579048,
+        "mag_baseline_drift_nt_per_min": 1.2699565763941205,
+        "mag_baseline_drift_azimuth_deg": 192.29035573069487,
+        "region_seeds": [
+          -120.0,
+          -113.94539059624346,
+          -33.333,
+          -114.49357003389999,
+          53.333,
+          -132.85792471264355
+        ]
+      },
+      "launch_overrides": {
+        "mag_driver": {
+          "target_x": 110.35451473434314,
+          "target_y": -49.346143327131124,
+          "target_z": -1.4298106624412508,
+          "dipole_peak_nt": 56.68220853281501,
+          "dipole_mx": -34558.65571447697,
+          "dipole_my": -18949.278638966716,
+          "dipole_mz": -137565.2285034114,
+          "dipole_soft_m": 11.5,
+          "synthetic_noise_nt": 4.173872116579048,
+          "random_seed": 525727462,
+          "raw_topic": "mag/plant"
+        },
+        "mag_baseline_drift": {
+          "drift_nt_per_min": 1.2699565763941205,
+          "drift_azimuth_deg": 192.29035573069487,
+          "drift_vertical_fraction": 0.15
+        },
+        "bayes_fusion": {
+          "dipole_fit_target_z": -1.4298106624412508
+        },
+        "mission_manager": {
+          "region_seeds": [
+            -120.0,
+            -113.94539059624346,
+            -33.333,
+            -114.49357003389999,
+            53.333,
+            -132.85792471264355
+          ]
+        },
+        "plotter": {
+          "target_x": 110.35451473434314,
+          "target_y": -49.346143327131124
+        }
+      },
+      "mission_complete": true,
+      "mission_status": "MISSION_COMPLETE:verifier=asv1:conf=4:p=1.000",
+      "verify_success": true,
+      "verify_confirmations": 4,
+      "fix_x": 111.83161552560898,
+      "fix_y": -53.68931157607075,
+      "fix_error_m": 4.587476123769526,
+      "fix_rms_nt": 1.7560583930633227,
+      "centroid_x": 105.0,
+      "centroid_y": -54.99999999999999,
+      "centroid_error_m": 7.786971382870341,
+      "peak_x": 105.0,
+      "peak_y": -55.0,
+      "peak_error_m": 7.786971382870346,
+      "verify_candidate_x": 105.0,
+      "verify_candidate_y": -65.0,
+      "verify_candidate_error_m": 16.544305871659265,
+      "localization_error_m": 4.587476123769526,
+      "localization_source": "fix",
+      "timed_out": false,
+      "wall_time_s": 736.495719909668,
+      "domain_id": 53
+    },
+    {
+      "trial_id": 4,
+      "random_seed": 1881985144,
+      "ground_truth": {
+        "target_x": -94.70297054949015,
+        "target_y": -40.73336545543833,
+        "target_z": -1.0400003602188608,
+        "dipole_peak_nt": 53.692285019797495,
+        "dipole_mx": 101042.47146343527,
+        "dipole_my": 13379.098299637808,
+        "dipole_mz": -145996.57730845502,
+        "synthetic_noise_nt": 4.898648206422523,
+        "mag_baseline_drift_nt_per_min": 0.4219656871726529,
+        "mag_baseline_drift_azimuth_deg": 339.4474971606196,
+        "region_seeds": [
+          -120.0,
+          -134.03699268287886,
+          -33.333,
+          -125.53640855822755,
+          53.333,
+          -126.96777372072891
+        ]
+      },
+      "launch_overrides": {
+        "mag_driver": {
+          "target_x": -94.70297054949015,
+          "target_y": -40.73336545543833,
+          "target_z": -1.0400003602188608,
+          "dipole_peak_nt": 53.692285019797495,
+          "dipole_mx": 101042.47146343527,
+          "dipole_my": 13379.098299637808,
+          "dipole_mz": -145996.57730845502,
+          "dipole_soft_m": 11.5,
+          "synthetic_noise_nt": 4.898648206422523,
+          "random_seed": 1881985144,
+          "raw_topic": "mag/plant"
+        },
+        "mag_baseline_drift": {
+          "drift_nt_per_min": 0.4219656871726529,
+          "drift_azimuth_deg": 339.4474971606196,
+          "drift_vertical_fraction": 0.15
+        },
+        "bayes_fusion": {
+          "dipole_fit_target_z": -1.0400003602188608
+        },
+        "mission_manager": {
+          "region_seeds": [
+            -120.0,
+            -134.03699268287886,
+            -33.333,
+            -125.53640855822755,
+            53.333,
+            -126.96777372072891
+          ]
+        },
+        "plotter": {
+          "target_x": -94.70297054949015,
+          "target_y": -40.73336545543833
+        }
+      },
+      "mission_complete": true,
+      "mission_status": "MISSION_COMPLETE:verifier=asv2:conf=4:p=0.524",
+      "verify_success": true,
+      "verify_confirmations": 4,
+      "fix_x": -96.7001709040856,
+      "fix_y": -36.175252240968085,
+      "fix_error_m": 4.976465144289114,
+      "fix_rms_nt": 12.390485521404159,
+      "centroid_x": -102.29216397204786,
+      "centroid_y": -51.2101078445701,
+      "centroid_error_m": 12.936691535830317,
+      "peak_x": -105.0,
+      "peak_y": -45.0,
+      "peak_error_m": 11.145985189363667,
+      "verify_candidate_x": -105.00000000000001,
+      "verify_candidate_y": -49.311735243613626,
+      "verify_candidate_error_m": 13.402135789766726,
+      "localization_error_m": 4.976465144289114,
+      "localization_source": "fix",
+      "timed_out": false,
+      "wall_time_s": 552.8525738716125,
+      "domain_id": 54
+    },
+    {
+      "trial_id": 5,
+      "random_seed": 297065155,
+      "ground_truth": {
+        "target_x": 67.50843627027605,
+        "target_y": -75.05381183554059,
+        "target_z": -0.6729752691699462,
+        "dipole_peak_nt": 42.857431808841255,
+        "dipole_mx": -14339.736375308983,
+        "dipole_my": -57377.753557422184,
+        "dipole_mz": -89271.58492307701,
+        "synthetic_noise_nt": 5.49996309140297,
+        "mag_baseline_drift_nt_per_min": 0.7239928874272219,
+        "mag_baseline_drift_azimuth_deg": 359.03728007609794,
+        "region_seeds": [
+          -120.0,
+          -112.58958565043227,
+          -33.333,
+          -122.1469851811626,
+          53.333,
+          -117.49401225163031
+        ]
+      },
+      "launch_overrides": {
+        "mag_driver": {
+          "target_x": 67.50843627027605,
+          "target_y": -75.05381183554059,
+          "target_z": -0.6729752691699462,
+          "dipole_peak_nt": 42.857431808841255,
+          "dipole_mx": -14339.736375308983,
+          "dipole_my": -57377.753557422184,
+          "dipole_mz": -89271.58492307701,
+          "dipole_soft_m": 11.5,
+          "synthetic_noise_nt": 5.49996309140297,
+          "random_seed": 297065155,
+          "raw_topic": "mag/plant"
+        },
+        "mag_baseline_drift": {
+          "drift_nt_per_min": 0.7239928874272219,
+          "drift_azimuth_deg": 359.03728007609794,
+          "drift_vertical_fraction": 0.15
+        },
+        "bayes_fusion": {
+          "dipole_fit_target_z": -0.6729752691699462
+        },
+        "mission_manager": {
+          "region_seeds": [
+            -120.0,
+            -112.58958565043227,
+            -33.333,
+            -122.1469851811626,
+            53.333,
+            -117.49401225163031
+          ]
+        },
+        "plotter": {
+          "target_x": 67.50843627027605,
+          "target_y": -75.05381183554059
+        }
+      },
+      "mission_complete": true,
+      "mission_status": "MISSION_COMPLETE:verifier=asv1:conf=4:p=0.748",
+      "verify_success": true,
+      "verify_confirmations": 4,
+      "fix_x": 65.91141446413465,
+      "fix_y": -79.98180207961776,
+      "fix_error_m": 5.180305637219776,
+      "fix_rms_nt": 2.2773417230755357,
+      "centroid_x": 65.0,
+      "centroid_y": -84.99999999999999,
+      "centroid_error_m": 10.257626992870655,
+      "peak_x": 65.0,
+      "peak_y": -85.0,
+      "peak_error_m": 10.25762699287067,
+      "verify_candidate_x": 65.0,
+      "verify_candidate_y": -95.0,
+      "verify_candidate_error_m": 20.10330009759734,
+      "localization_error_m": 5.180305637219776,
+      "localization_source": "fix",
+      "timed_out": false,
+      "wall_time_s": 483.84048533439636,
+      "domain_id": 55
+    },
+    {
+      "trial_id": 6,
+      "random_seed": 1547738333,
+      "ground_truth": {
+        "target_x": -27.272705855080403,
+        "target_y": -106.70185372026857,
+        "target_z": -1.8355263044740113,
+        "dipole_peak_nt": 55.84158728725928,
+        "dipole_mx": 5344.0661367913235,
+        "dipole_my": -5808.156985545488,
+        "dipole_mz": -158055.1013355967,
+        "synthetic_noise_nt": 5.3921222919216305,
+        "mag_baseline_drift_nt_per_min": 1.7215594044689961,
+        "mag_baseline_drift_azimuth_deg": 4.133167899415069,
+        "region_seeds": [
+          -120.0,
+          -105.1163585927971,
+          -33.333,
+          -119.12656964702589,
+          53.333,
+          -105.86764867159145
+        ]
+      },
+      "launch_overrides": {
+        "mag_driver": {
+          "target_x": -27.272705855080403,
+          "target_y": -106.70185372026857,
+          "target_z": -1.8355263044740113,
+          "dipole_peak_nt": 55.84158728725928,
+          "dipole_mx": 5344.0661367913235,
+          "dipole_my": -5808.156985545488,
+          "dipole_mz": -158055.1013355967,
+          "dipole_soft_m": 11.5,
+          "synthetic_noise_nt": 5.3921222919216305,
+          "random_seed": 1547738333,
+          "raw_topic": "mag/plant"
+        },
+        "mag_baseline_drift": {
+          "drift_nt_per_min": 1.7215594044689961,
+          "drift_azimuth_deg": 4.133167899415069,
+          "drift_vertical_fraction": 0.15
+        },
+        "bayes_fusion": {
+          "dipole_fit_target_z": -1.8355263044740113
+        },
+        "mission_manager": {
+          "region_seeds": [
+            -120.0,
+            -105.1163585927971,
+            -33.333,
+            -119.12656964702589,
+            53.333,
+            -105.86764867159145
+          ]
+        },
+        "plotter": {
+          "target_x": -27.272705855080403,
+          "target_y": -106.70185372026857
+        }
+      },
+      "mission_complete": true,
+      "mission_status": "MISSION_COMPLETE:verifier=asv1:conf=4:p=1.000",
+      "verify_success": true,
+      "verify_confirmations": 4,
+      "fix_x": -24.942420056164185,
+      "fix_y": -105.81763789784516,
+      "fix_error_m": 2.492402360224872,
+      "fix_rms_nt": 15.517171231001845,
+      "centroid_x": -25.000000000000004,
+      "centroid_y": -105.0,
+      "centroid_error_m": 2.8392777231029576,
+      "peak_x": -25.0,
+      "peak_y": -105.0,
+      "peak_error_m": 2.8392777231029602,
+      "verify_candidate_x": -25.0,
+      "verify_candidate_y": -105.0,
+      "verify_candidate_error_m": 2.8392777231029602,
+      "localization_error_m": 2.492402360224872,
+      "localization_source": "fix",
+      "timed_out": false,
+      "wall_time_s": 227.35360407829285,
+      "domain_id": 56
+    },
+    {
+      "trial_id": 7,
+      "random_seed": 1342821944,
+      "ground_truth": {
+        "target_x": -61.014103324726065,
+        "target_y": -57.43855402858732,
+        "target_z": -0.847101901013831,
+        "dipole_peak_nt": 45.87000257294852,
+        "dipole_mx": -290.0683323317099,
+        "dipole_my": -51.39150935976506,
+        "dipole_mz": -115574.97542655317,
+        "synthetic_noise_nt": 3.3812283112173165,
+        "mag_baseline_drift_nt_per_min": 1.0153633492086505,
+        "mag_baseline_drift_azimuth_deg": 38.30789620717379,
+        "region_seeds": [
+          -120.0,
+          -113.40957993342228,
+          -33.333,
+          -105.84335703389657,
+          53.333,
+          -112.14113402843806
+        ]
+      },
+      "launch_overrides": {
+        "mag_driver": {
+          "target_x": -61.014103324726065,
+          "target_y": -57.43855402858732,
+          "target_z": -0.847101901013831,
+          "dipole_peak_nt": 45.87000257294852,
+          "dipole_mx": -290.0683323317099,
+          "dipole_my": -51.39150935976506,
+          "dipole_mz": -115574.97542655317,
+          "dipole_soft_m": 11.5,
+          "synthetic_noise_nt": 3.3812283112173165,
+          "random_seed": 1342821944,
+          "raw_topic": "mag/plant"
+        },
+        "mag_baseline_drift": {
+          "drift_nt_per_min": 1.0153633492086505,
+          "drift_azimuth_deg": 38.30789620717379,
+          "drift_vertical_fraction": 0.15
+        },
+        "bayes_fusion": {
+          "dipole_fit_target_z": -0.847101901013831
+        },
+        "mission_manager": {
+          "region_seeds": [
+            -120.0,
+            -113.40957993342228,
+            -33.333,
+            -105.84335703389657,
+            53.333,
+            -112.14113402843806
+          ]
+        },
+        "plotter": {
+          "target_x": -61.014103324726065,
+          "target_y": -57.43855402858732
+        }
+      },
+      "mission_complete": true,
+      "mission_status": "MISSION_COMPLETE:verifier=asv2:conf=4:p=0.884",
+      "verify_success": true,
+      "verify_confirmations": 4,
+      "fix_x": -60.22035931540397,
+      "fix_y": -56.586842583721555,
+      "fix_error_m": 1.1642344856814903,
+      "fix_rms_nt": 2.5143913061056193,
+      "centroid_x": -61.09436493801916,
+      "centroid_y": -54.99999999999999,
+      "centroid_error_m": 2.4398745207300903,
+      "peak_x": -65.0,
+      "peak_y": -55.0,
+      "peak_error_m": 4.67267782500562,
+      "verify_candidate_x": -65.0,
+      "verify_candidate_y": -55.0,
+      "verify_candidate_error_m": 4.67267782500562,
+      "localization_error_m": 1.1642344856814903,
+      "localization_source": "fix",
+      "timed_out": false,
+      "wall_time_s": 590.991012096405,
+      "domain_id": 57
+    },
+    {
+      "trial_id": 8,
+      "random_seed": 660381568,
+      "ground_truth": {
+        "target_x": -77.40336700893299,
+        "target_y": -67.37208519932794,
+        "target_z": -1.7707410971755477,
+        "dipole_peak_nt": 50.78758060239252,
+        "dipole_mx": 240.13022490480444,
+        "dipole_my": 66826.37968989034,
+        "dipole_mz": -151045.79656206578,
+        "synthetic_noise_nt": 6.337575600526058,
+        "mag_baseline_drift_nt_per_min": 1.7574437556463685,
+        "mag_baseline_drift_azimuth_deg": 299.3995905700246,
+        "region_seeds": [
+          -120.0,
+          -125.27531828985981,
+          -33.333,
+          -134.41569772842502,
+          53.333,
+          -107.12704151206148
+        ]
+      },
+      "launch_overrides": {
+        "mag_driver": {
+          "target_x": -77.40336700893299,
+          "target_y": -67.37208519932794,
+          "target_z": -1.7707410971755477,
+          "dipole_peak_nt": 50.78758060239252,
+          "dipole_mx": 240.13022490480444,
+          "dipole_my": 66826.37968989034,
+          "dipole_mz": -151045.79656206578,
+          "dipole_soft_m": 11.5,
+          "synthetic_noise_nt": 6.337575600526058,
+          "random_seed": 660381568,
+          "raw_topic": "mag/plant"
+        },
+        "mag_baseline_drift": {
+          "drift_nt_per_min": 1.7574437556463685,
+          "drift_azimuth_deg": 299.3995905700246,
+          "drift_vertical_fraction": 0.15
+        },
+        "bayes_fusion": {
+          "dipole_fit_target_z": -1.7707410971755477
+        },
+        "mission_manager": {
+          "region_seeds": [
+            -120.0,
+            -125.27531828985981,
+            -33.333,
+            -134.41569772842502,
+            53.333,
+            -107.12704151206148
+          ]
+        },
+        "plotter": {
+          "target_x": -77.40336700893299,
+          "target_y": -67.37208519932794
+        }
+      },
+      "mission_complete": true,
+      "mission_status": "MISSION_COMPLETE:verifier=asv2:conf=4:p=1.000",
+      "verify_success": true,
+      "verify_confirmations": 4,
+      "fix_x": -81.0687916306677,
+      "fix_y": -69.7221606496356,
+      "fix_error_m": 4.354100628115732,
+      "fix_rms_nt": 2.7496154243274957,
+      "centroid_x": -75.0,
+      "centroid_y": -75.0,
+      "centroid_error_m": 7.9975782075537944,
+      "peak_x": -75.0,
+      "peak_y": -75.0,
+      "peak_error_m": 7.9975782075537944,
+      "verify_candidate_x": -75.0,
+      "verify_candidate_y": -75.0,
+      "verify_candidate_error_m": 7.9975782075537944,
+      "localization_error_m": 4.354100628115732,
+      "localization_source": "fix",
+      "timed_out": false,
+      "wall_time_s": 436.60551381111145,
+      "domain_id": 58
+    },
+    {
+      "trial_id": 9,
+      "random_seed": 454833169,
+      "ground_truth": {
+        "target_x": -103.94189383685112,
+        "target_y": -70.2850139417763,
+        "target_z": -1.8818644275629508,
+        "dipole_peak_nt": 56.320465068401774,
+        "dipole_mx": 56658.56318862613,
+        "dipole_my": 56119.65571974189,
+        "dipole_mz": -179352.74612073347,
+        "synthetic_noise_nt": 6.123353163912395,
+        "mag_baseline_drift_nt_per_min": 1.055347574836508,
+        "mag_baseline_drift_azimuth_deg": 218.3738102937464,
+        "region_seeds": [
+          -120.0,
+          -115.20747531757898,
+          -33.333,
+          -106.59453960885027,
+          53.333,
+          -130.04619123077617
+        ]
+      },
+      "launch_overrides": {
+        "mag_driver": {
+          "target_x": -103.94189383685112,
+          "target_y": -70.2850139417763,
+          "target_z": -1.8818644275629508,
+          "dipole_peak_nt": 56.320465068401774,
+          "dipole_mx": 56658.56318862613,
+          "dipole_my": 56119.65571974189,
+          "dipole_mz": -179352.74612073347,
+          "dipole_soft_m": 11.5,
+          "synthetic_noise_nt": 6.123353163912395,
+          "random_seed": 454833169,
+          "raw_topic": "mag/plant"
+        },
+        "mag_baseline_drift": {
+          "drift_nt_per_min": 1.055347574836508,
+          "drift_azimuth_deg": 218.3738102937464,
+          "drift_vertical_fraction": 0.15
+        },
+        "bayes_fusion": {
+          "dipole_fit_target_z": -1.8818644275629508
+        },
+        "mission_manager": {
+          "region_seeds": [
+            -120.0,
+            -115.20747531757898,
+            -33.333,
+            -106.59453960885027,
+            53.333,
+            -130.04619123077617
+          ]
+        },
+        "plotter": {
+          "target_x": -103.94189383685112,
+          "target_y": -70.2850139417763
+        }
+      },
+      "mission_complete": true,
+      "mission_status": "MISSION_COMPLETE:verifier=asv2:conf=4:p=0.771",
+      "verify_success": true,
+      "verify_confirmations": 4,
+      "fix_x": -103.14520651362412,
+      "fix_y": -66.86702421714861,
+      "fix_error_m": 3.509610298687173,
+      "fix_rms_nt": 9.96034355369114,
+      "centroid_x": -105.0,
+      "centroid_y": -74.99999999999999,
+      "centroid_error_m": 4.832254358137346,
+      "peak_x": -105.0,
+      "peak_y": -75.0,
+      "peak_error_m": 4.8322543581373605,
+      "verify_candidate_x": -105.00000000000001,
+      "verify_candidate_y": -85.0,
+      "verify_candidate_error_m": 14.752979473523698,
+      "localization_error_m": 3.509610298687173,
+      "localization_source": "fix",
+      "timed_out": false,
+      "wall_time_s": 400.7253792285919,
+      "domain_id": 59
+    },
+    {
+      "trial_id": 10,
+      "random_seed": 15442220,
+      "ground_truth": {
+        "target_x": 103.68434644238704,
+        "target_y": -61.7092657530265,
+        "target_z": -0.9305765407713174,
+        "dipole_peak_nt": 53.43373919276566,
+        "dipole_mx": 28819.978744248478,
+        "dipole_my": -91600.42892237763,
+        "dipole_mz": -112502.47638285345,
+        "synthetic_noise_nt": 3.7929460999820037,
+        "mag_baseline_drift_nt_per_min": 1.1078430448489596,
+        "mag_baseline_drift_azimuth_deg": 211.83844118772637,
+        "region_seeds": [
+          -120.0,
+          -127.56283159001975,
+          -33.333,
+          -133.07922311020965,
+          53.333,
+          -134.36897219978823
+        ]
+      },
+      "launch_overrides": {
+        "mag_driver": {
+          "target_x": 103.68434644238704,
+          "target_y": -61.7092657530265,
+          "target_z": -0.9305765407713174,
+          "dipole_peak_nt": 53.43373919276566,
+          "dipole_mx": 28819.978744248478,
+          "dipole_my": -91600.42892237763,
+          "dipole_mz": -112502.47638285345,
+          "dipole_soft_m": 11.5,
+          "synthetic_noise_nt": 3.7929460999820037,
+          "random_seed": 15442220,
+          "raw_topic": "mag/plant"
+        },
+        "mag_baseline_drift": {
+          "drift_nt_per_min": 1.1078430448489596,
+          "drift_azimuth_deg": 211.83844118772637,
+          "drift_vertical_fraction": 0.15
+        },
+        "bayes_fusion": {
+          "dipole_fit_target_z": -0.9305765407713174
+        },
+        "mission_manager": {
+          "region_seeds": [
+            -120.0,
+            -127.56283159001975,
+            -33.333,
+            -133.07922311020965,
+            53.333,
+            -134.36897219978823
+          ]
+        },
+        "plotter": {
+          "target_x": 103.68434644238704,
+          "target_y": -61.7092657530265
+        }
+      },
+      "mission_complete": true,
+      "mission_status": "MISSION_COMPLETE:verifier=asv1:conf=4:p=0.304",
+      "verify_success": true,
+      "verify_confirmations": 4,
+      "fix_x": 104.77528523605211,
+      "fix_y": -86.83508328213838,
+      "fix_error_m": 25.149490133156764,
+      "fix_rms_nt": 2.2925250481517474,
+      "centroid_x": 105.0,
+      "centroid_y": -85.0,
+      "centroid_error_m": 23.327864155271563,
+      "peak_x": 105.0,
+      "peak_y": -85.0,
+      "peak_error_m": 23.327864155271563,
+      "verify_candidate_x": 108.37948436290229,
+      "verify_candidate_y": -87.39236610232189,
+      "verify_candidate_error_m": 26.10873347454137,
+      "localization_error_m": 25.149490133156764,
+      "localization_source": "fix",
+      "timed_out": false,
+      "wall_time_s": 498.27917742729187,
+      "domain_id": 60
+    },
+    {
+      "trial_id": 11,
+      "random_seed": 1734086607,
+      "ground_truth": {
+        "target_x": -77.92646951532674,
+        "target_y": -93.9740751332192,
+        "target_z": -0.6418699804908081,
+        "dipole_peak_nt": 41.41714699777307,
+        "dipole_mx": 52937.53804203384,
+        "dipole_my": 12099.76349280948,
+        "dipole_mz": -93662.06525557028,
+        "synthetic_noise_nt": 7.017447801776226,
+        "mag_baseline_drift_nt_per_min": 0.9453420526235883,
+        "mag_baseline_drift_azimuth_deg": 282.4629927446712,
+        "region_seeds": [
+          -120.0,
+          -131.03064453824925,
+          -33.333,
+          -106.93457278257986,
+          53.333,
+          -117.86870720024146
+        ]
+      },
+      "launch_overrides": {
+        "mag_driver": {
+          "target_x": -77.92646951532674,
+          "target_y": -93.9740751332192,
+          "target_z": -0.6418699804908081,
+          "dipole_peak_nt": 41.41714699777307,
+          "dipole_mx": 52937.53804203384,
+          "dipole_my": 12099.76349280948,
+          "dipole_mz": -93662.06525557028,
+          "dipole_soft_m": 11.5,
+          "synthetic_noise_nt": 7.017447801776226,
+          "random_seed": 1734086607,
+          "raw_topic": "mag/plant"
+        },
+        "mag_baseline_drift": {
+          "drift_nt_per_min": 0.9453420526235883,
+          "drift_azimuth_deg": 282.4629927446712,
+          "drift_vertical_fraction": 0.15
+        },
+        "bayes_fusion": {
+          "dipole_fit_target_z": -0.6418699804908081
+        },
+        "mission_manager": {
+          "region_seeds": [
+            -120.0,
+            -131.03064453824925,
+            -33.333,
+            -106.93457278257986,
+            53.333,
+            -117.86870720024146
+          ]
+        },
+        "plotter": {
+          "target_x": -77.92646951532674,
+          "target_y": -93.9740751332192
+        }
+      },
+      "mission_complete": true,
+      "mission_status": "MISSION_COMPLETE:verifier=asv2:conf=4:p=0.797",
+      "verify_success": true,
+      "verify_confirmations": 4,
+      "fix_x": -69.99788377524136,
+      "fix_y": -97.12991813006434,
+      "fix_error_m": 8.533569994944774,
+      "fix_rms_nt": 4.096495904078023,
+      "centroid_x": -65.0,
+      "centroid_y": -105.0,
+      "centroid_error_m": 16.990133410263933,
+      "peak_x": -65.0,
+      "peak_y": -105.0,
+      "peak_error_m": 16.990133410263933,
+      "verify_candidate_x": -65.0,
+      "verify_candidate_y": -105.0,
+      "verify_candidate_error_m": 16.990133410263933,
+      "localization_error_m": 8.533569994944774,
+      "localization_source": "fix",
+      "timed_out": false,
+      "wall_time_s": 176.25842022895813,
+      "domain_id": 61
+    },
+    {
+      "trial_id": 12,
+      "random_seed": 1151664883,
+      "ground_truth": {
+        "target_x": -27.04494690054118,
+        "target_y": -63.87120753397358,
+        "target_z": -1.4685536501156693,
+        "dipole_peak_nt": 57.276734967392066,
+        "dipole_mx": -53593.44066416225,
+        "dipole_my": -40938.6666400439,
+        "dipole_mz": -119660.89655718236,
+        "synthetic_noise_nt": 3.877715932348166,
+        "mag_baseline_drift_nt_per_min": 0.218538064489608,
+        "mag_baseline_drift_azimuth_deg": 68.97242597099545,
+        "region_seeds": [
+          -120.0,
+          -133.1816197776896,
+          -33.333,
+          -113.15359234676453,
+          53.333,
+          -110.98222467414904
+        ]
+      },
+      "launch_overrides": {
+        "mag_driver": {
+          "target_x": -27.04494690054118,
+          "target_y": -63.87120753397358,
+          "target_z": -1.4685536501156693,
+          "dipole_peak_nt": 57.276734967392066,
+          "dipole_mx": -53593.44066416225,
+          "dipole_my": -40938.6666400439,
+          "dipole_mz": -119660.89655718236,
+          "dipole_soft_m": 11.5,
+          "synthetic_noise_nt": 3.877715932348166,
+          "random_seed": 1151664883,
+          "raw_topic": "mag/plant"
+        },
+        "mag_baseline_drift": {
+          "drift_nt_per_min": 0.218538064489608,
+          "drift_azimuth_deg": 68.97242597099545,
+          "drift_vertical_fraction": 0.15
+        },
+        "bayes_fusion": {
+          "dipole_fit_target_z": -1.4685536501156693
+        },
+        "mission_manager": {
+          "region_seeds": [
+            -120.0,
+            -133.1816197776896,
+            -33.333,
+            -113.15359234676453,
+            53.333,
+            -110.98222467414904
+          ]
+        },
+        "plotter": {
+          "target_x": -27.04494690054118,
+          "target_y": -63.87120753397358
+        }
+      },
+      "mission_complete": true,
+      "mission_status": "MISSION_COMPLETE:verifier=asv1:conf=4:p=0.570",
+      "verify_success": true,
+      "verify_confirmations": 4,
+      "fix_x": -32.19656180011785,
+      "fix_y": -68.24300926603172,
+      "fix_error_m": 6.756610574686605,
+      "fix_rms_nt": 3.2747886261157095,
+      "centroid_x": -28.70177581921733,
+      "centroid_y": -75.0,
+      "centroid_error_m": 11.251448965251006,
+      "peak_x": -25.0,
+      "peak_y": -75.0,
+      "peak_error_m": 11.315115093445552,
+      "verify_candidate_x": -28.70177581921733,
+      "verify_candidate_y": -75.0,
+      "verify_candidate_error_m": 11.251448965251006,
+      "localization_error_m": 6.756610574686605,
+      "localization_source": "fix",
+      "timed_out": false,
+      "wall_time_s": 378.4663188457489,
+      "domain_id": 62
+    },
+    {
+      "trial_id": 13,
+      "random_seed": 357150386,
+      "ground_truth": {
+        "target_x": -5.207890677706381,
+        "target_y": -90.50183987331417,
+        "target_z": -1.6252903281768494,
+        "dipole_peak_nt": 48.862614901069136,
+        "dipole_mx": 21411.61310125372,
+        "dipole_my": 65078.62171935303,
+        "dipole_mz": -148510.88018342308,
+        "synthetic_noise_nt": 7.46285919493209,
+        "mag_baseline_drift_nt_per_min": 1.8527339660162552,
+        "mag_baseline_drift_azimuth_deg": 305.53046438915,
+        "region_seeds": [
+          -120.0,
+          -105.0215259476182,
+          -33.333,
+          -109.91917244760144,
+          53.333,
+          -105.93011228145747
+        ]
+      },
+      "launch_overrides": {
+        "mag_driver": {
+          "target_x": -5.207890677706381,
+          "target_y": -90.50183987331417,
+          "target_z": -1.6252903281768494,
+          "dipole_peak_nt": 48.862614901069136,
+          "dipole_mx": 21411.61310125372,
+          "dipole_my": 65078.62171935303,
+          "dipole_mz": -148510.88018342308,
+          "dipole_soft_m": 11.5,
+          "synthetic_noise_nt": 7.46285919493209,
+          "random_seed": 357150386,
+          "raw_topic": "mag/plant"
+        },
+        "mag_baseline_drift": {
+          "drift_nt_per_min": 1.8527339660162552,
+          "drift_azimuth_deg": 305.53046438915,
+          "drift_vertical_fraction": 0.15
+        },
+        "bayes_fusion": {
+          "dipole_fit_target_z": -1.6252903281768494
+        },
+        "mission_manager": {
+          "region_seeds": [
+            -120.0,
+            -105.0215259476182,
+            -33.333,
+            -109.91917244760144,
+            53.333,
+            -105.93011228145747
+          ]
+        },
+        "plotter": {
+          "target_x": -5.207890677706381,
+          "target_y": -90.50183987331417
+        }
+      },
+      "mission_complete": false,
+      "mission_status": "",
+      "verify_success": null,
+      "verify_confirmations": 0,
+      "fix_x": -22.182239046255454,
+      "fix_y": 272.63168331733937,
+      "fix_error_m": 363.5300320020256,
+      "fix_rms_nt": 1.0088914180541357,
+      "centroid_x": 27.873369688960832,
+      "centroid_y": -120.00019911091715,
+      "centroid_error_m": 44.322939717012275,
+      "peak_x": 25.0,
+      "peak_y": -125.0,
+      "peak_error_m": 45.854549516080915,
+      "verify_candidate_x": null,
+      "verify_candidate_y": null,
+      "verify_candidate_error_m": null,
+      "localization_error_m": 363.5300320020256,
+      "localization_source": "fix",
+      "timed_out": true,
+      "wall_time_s": 7989.321872472763,
+      "domain_id": 63
+    },
+    {
+      "trial_id": 14,
+      "random_seed": 1045118909,
+      "ground_truth": {
+        "target_x": -1.2427721352640262,
+        "target_y": -49.47447241788492,
+        "target_z": -0.6463357017341771,
+        "dipole_peak_nt": 40.04310756702853,
+        "dipole_mx": -72575.70822687524,
+        "dipole_my": 16284.538885837725,
+        "dipole_mz": -83502.1659071877,
+        "synthetic_noise_nt": 2.152459849810688,
+        "mag_baseline_drift_nt_per_min": 1.5667230569685744,
+        "mag_baseline_drift_azimuth_deg": 238.27367230226827,
+        "region_seeds": [
+          -120.0,
+          -126.4425231315924,
+          -33.333,
+          -114.10225489199513,
+          53.333,
+          -113.08484047753602
+        ]
+      },
+      "launch_overrides": {
+        "mag_driver": {
+          "target_x": -1.2427721352640262,
+          "target_y": -49.47447241788492,
+          "target_z": -0.6463357017341771,
+          "dipole_peak_nt": 40.04310756702853,
+          "dipole_mx": -72575.70822687524,
+          "dipole_my": 16284.538885837725,
+          "dipole_mz": -83502.1659071877,
+          "dipole_soft_m": 11.5,
+          "synthetic_noise_nt": 2.152459849810688,
+          "random_seed": 1045118909,
+          "raw_topic": "mag/plant"
+        },
+        "mag_baseline_drift": {
+          "drift_nt_per_min": 1.5667230569685744,
+          "drift_azimuth_deg": 238.27367230226827,
+          "drift_vertical_fraction": 0.15
+        },
+        "bayes_fusion": {
+          "dipole_fit_target_z": -0.6463357017341771
+        },
+        "mission_manager": {
+          "region_seeds": [
+            -120.0,
+            -126.4425231315924,
+            -33.333,
+            -114.10225489199513,
+            53.333,
+            -113.08484047753602
+          ]
+        },
+        "plotter": {
+          "target_x": -1.2427721352640262,
+          "target_y": -49.47447241788492
+        }
+      },
+      "mission_complete": true,
+      "mission_status": "MISSION_COMPLETE:verifier=asv1:conf=4:p=0.999",
+      "verify_success": true,
+      "verify_confirmations": 4,
+      "fix_x": -5.0582526751003805,
+      "fix_y": -50.0552414239271,
+      "fix_error_m": 3.8594279871827046,
+      "fix_rms_nt": 4.452766520565488,
+      "centroid_x": -15.0,
+      "centroid_y": -54.99999999999999,
+      "centroid_error_m": 14.82540972732229,
+      "peak_x": -15.0,
+      "peak_y": -55.0,
+      "peak_error_m": 14.825409727322294,
+      "verify_candidate_x": -14.999999999999998,
+      "verify_candidate_y": -55.0,
+      "verify_candidate_error_m": 14.825409727322292,
+      "localization_error_m": 3.8594279871827046,
+      "localization_source": "fix",
+      "timed_out": false,
+      "wall_time_s": 532.9558506011963,
+      "domain_id": 64
+    },
+    {
+      "trial_id": 15,
+      "random_seed": 1277828161,
+      "ground_truth": {
+        "target_x": -100.21947830036238,
+        "target_y": -42.19034445215888,
+        "target_z": -1.1312295637756158,
+        "dipole_peak_nt": 54.959511207581286,
+        "dipole_mx": -1046.0644464115796,
+        "dipole_my": -58402.16266268338,
+        "dipole_mz": -118249.13703374245,
+        "synthetic_noise_nt": 4.79536640961992,
+        "mag_baseline_drift_nt_per_min": 0.16022293048117375,
+        "mag_baseline_drift_azimuth_deg": 66.89698595306035,
+        "region_seeds": [
+          -120.0,
+          -109.41840323855143,
+          -33.333,
+          -130.2770181618155,
+          53.333,
+          -106.17663290176648
+        ]
+      },
+      "launch_overrides": {
+        "mag_driver": {
+          "target_x": -100.21947830036238,
+          "target_y": -42.19034445215888,
+          "target_z": -1.1312295637756158,
+          "dipole_peak_nt": 54.959511207581286,
+          "dipole_mx": -1046.0644464115796,
+          "dipole_my": -58402.16266268338,
+          "dipole_mz": -118249.13703374245,
+          "dipole_soft_m": 11.5,
+          "synthetic_noise_nt": 4.79536640961992,
+          "random_seed": 1277828161,
+          "raw_topic": "mag/plant"
+        },
+        "mag_baseline_drift": {
+          "drift_nt_per_min": 0.16022293048117375,
+          "drift_azimuth_deg": 66.89698595306035,
+          "drift_vertical_fraction": 0.15
+        },
+        "bayes_fusion": {
+          "dipole_fit_target_z": -1.1312295637756158
+        },
+        "mission_manager": {
+          "region_seeds": [
+            -120.0,
+            -109.41840323855143,
+            -33.333,
+            -130.2770181618155,
+            53.333,
+            -106.17663290176648
+          ]
+        },
+        "plotter": {
+          "target_x": -100.21947830036238,
+          "target_y": -42.19034445215888
+        }
+      },
+      "mission_complete": true,
+      "mission_status": "MISSION_COMPLETE:verifier=asv2:conf=4:p=1.000",
+      "verify_success": true,
+      "verify_confirmations": 4,
+      "fix_x": -101.4561187471083,
+      "fix_y": -45.05521308207361,
+      "fix_error_m": 3.1203768780705685,
+      "fix_rms_nt": 15.649301027169397,
+      "centroid_x": -104.99999999999999,
+      "centroid_y": -55.0,
+      "centroid_error_m": 13.672624582538742,
+      "peak_x": -105.0,
+      "peak_y": -55.0,
+      "peak_error_m": 13.672624582538747,
+      "verify_candidate_x": -105.0,
+      "verify_candidate_y": -55.0,
+      "verify_candidate_error_m": 13.672624582538747,
+      "localization_error_m": 3.1203768780705685,
+      "localization_source": "fix",
+      "timed_out": false,
+      "wall_time_s": 552.5664525032043,
+      "domain_id": 65
+    },
+    {
+      "trial_id": 16,
+      "random_seed": 570402825,
+      "ground_truth": {
+        "target_x": -62.5453865353247,
+        "target_y": -81.73571140772057,
+        "target_z": -0.5876058091563658,
+        "dipole_peak_nt": 51.57838115014421,
+        "dipole_mx": -6594.7824589895745,
+        "dipole_my": -4339.489634631045,
+        "dipole_mz": -122434.89451403142,
+        "synthetic_noise_nt": 4.987727870967294,
+        "mag_baseline_drift_nt_per_min": 1.3394519495396584,
+        "mag_baseline_drift_azimuth_deg": 113.1061906064074,
+        "region_seeds": [
+          -120.0,
+          -118.04319228467732,
+          -33.333,
+          -125.50890462069819,
+          53.333,
+          -127.17702913189102
+        ]
+      },
+      "launch_overrides": {
+        "mag_driver": {
+          "target_x": -62.5453865353247,
+          "target_y": -81.73571140772057,
+          "target_z": -0.5876058091563658,
+          "dipole_peak_nt": 51.57838115014421,
+          "dipole_mx": -6594.7824589895745,
+          "dipole_my": -4339.489634631045,
+          "dipole_mz": -122434.89451403142,
+          "dipole_soft_m": 11.5,
+          "synthetic_noise_nt": 4.987727870967294,
+          "random_seed": 570402825,
+          "raw_topic": "mag/plant"
+        },
+        "mag_baseline_drift": {
+          "drift_nt_per_min": 1.3394519495396584,
+          "drift_azimuth_deg": 113.1061906064074,
+          "drift_vertical_fraction": 0.15
+        },
+        "bayes_fusion": {
+          "dipole_fit_target_z": -0.5876058091563658
+        },
+        "mission_manager": {
+          "region_seeds": [
+            -120.0,
+            -118.04319228467732,
+            -33.333,
+            -125.50890462069819,
+            53.333,
+            -127.17702913189102
+          ]
+        },
+        "plotter": {
+          "target_x": -62.5453865353247,
+          "target_y": -81.73571140772057
+        }
+      },
+      "mission_complete": true,
+      "mission_status": "MISSION_COMPLETE:verifier=asv2:conf=4:p=0.474",
+      "verify_success": true,
+      "verify_confirmations": 4,
+      "fix_x": -64.85096717494801,
+      "fix_y": -79.87874761906164,
+      "fix_error_m": 2.9604081810109144,
+      "fix_rms_nt": 5.6147933833202295,
+      "centroid_x": -65.0,
+      "centroid_y": -81.57492720506403,
+      "centroid_error_m": 2.4598737408227214,
+      "peak_x": -65.0,
+      "peak_y": -85.0,
+      "peak_error_m": 4.084202158886222,
+      "verify_candidate_x": -65.0,
+      "verify_candidate_y": -81.1350507676864,
+      "verify_candidate_error_m": 2.5270378836597476,
+      "localization_error_m": 2.9604081810109144,
+      "localization_source": "fix",
+      "timed_out": false,
+      "wall_time_s": 450.2507395744324,
+      "domain_id": 66
+    },
+    {
+      "trial_id": 17,
+      "random_seed": 1888218466,
+      "ground_truth": {
+        "target_x": 11.446014863998094,
+        "target_y": -89.00020441408665,
+        "target_z": -1.525734205592219,
+        "dipole_peak_nt": 41.450862289863146,
+        "dipole_mx": -2065.868642463001,
+        "dipole_my": 84212.34343770433,
+        "dipole_mz": -84442.43662480381,
+        "synthetic_noise_nt": 6.263051446900815,
+        "mag_baseline_drift_nt_per_min": 1.8665187559874181,
+        "mag_baseline_drift_azimuth_deg": 317.11110252711825,
+        "region_seeds": [
+          -120.0,
+          -132.802178367011,
+          -33.333,
+          -128.6053706319888,
+          53.333,
+          -127.04398755748795
+        ]
+      },
+      "launch_overrides": {
+        "mag_driver": {
+          "target_x": 11.446014863998094,
+          "target_y": -89.00020441408665,
+          "target_z": -1.525734205592219,
+          "dipole_peak_nt": 41.450862289863146,
+          "dipole_mx": -2065.868642463001,
+          "dipole_my": 84212.34343770433,
+          "dipole_mz": -84442.43662480381,
+          "dipole_soft_m": 11.5,
+          "synthetic_noise_nt": 6.263051446900815,
+          "random_seed": 1888218466,
+          "raw_topic": "mag/plant"
+        },
+        "mag_baseline_drift": {
+          "drift_nt_per_min": 1.8665187559874181,
+          "drift_azimuth_deg": 317.11110252711825,
+          "drift_vertical_fraction": 0.15
+        },
+        "bayes_fusion": {
+          "dipole_fit_target_z": -1.525734205592219
+        },
+        "mission_manager": {
+          "region_seeds": [
+            -120.0,
+            -132.802178367011,
+            -33.333,
+            -128.6053706319888,
+            53.333,
+            -127.04398755748795
+          ]
+        },
+        "plotter": {
+          "target_x": 11.446014863998094,
+          "target_y": -89.00020441408665
+        }
+      },
+      "mission_complete": false,
+      "mission_status": "VERIFY_ASSIGNED:asv1@15.0,-108.3",
+      "verify_success": null,
+      "verify_confirmations": 0,
+      "fix_x": 9.267354684268446,
+      "fix_y": -111.66672683698873,
+      "fix_error_m": 22.770985901507697,
+      "fix_rms_nt": 5.173020044945894,
+      "centroid_x": 15.708104610156358,
+      "centroid_y": -105.59589544965158,
+      "centroid_error_m": 17.13424553204014,
+      "peak_x": 15.0,
+      "peak_y": -105.0,
+      "peak_error_m": 16.3897611067988,
+      "verify_candidate_x": null,
+      "verify_candidate_y": null,
+      "verify_candidate_error_m": null,
+      "localization_error_m": 22.770985901507697,
+      "localization_source": "fix",
+      "timed_out": true,
+      "wall_time_s": 1200.680136680603,
+      "domain_id": 67
+    },
+    {
+      "trial_id": 18,
+      "random_seed": 1910643500,
+      "ground_truth": {
+        "target_x": -101.00084058555622,
+        "target_y": -79.32707988946031,
+        "target_z": -1.1851730566076197,
+        "dipole_peak_nt": 59.67706620502965,
+        "dipole_mx": -68556.42441343403,
+        "dipole_my": -38896.81181233504,
+        "dipole_mz": -178694.2471076576,
+        "synthetic_noise_nt": 3.117620000852229,
+        "mag_baseline_drift_nt_per_min": 1.7562539299471842,
+        "mag_baseline_drift_azimuth_deg": 95.20773173536595,
+        "region_seeds": [
+          -120.0,
+          -118.36193152530967,
+          -33.333,
+          -107.04731881691768,
+          53.333,
+          -131.89240494245365
+        ]
+      },
+      "launch_overrides": {
+        "mag_driver": {
+          "target_x": -101.00084058555622,
+          "target_y": -79.32707988946031,
+          "target_z": -1.1851730566076197,
+          "dipole_peak_nt": 59.67706620502965,
+          "dipole_mx": -68556.42441343403,
+          "dipole_my": -38896.81181233504,
+          "dipole_mz": -178694.2471076576,
+          "dipole_soft_m": 11.5,
+          "synthetic_noise_nt": 3.117620000852229,
+          "random_seed": 1910643500,
+          "raw_topic": "mag/plant"
+        },
+        "mag_baseline_drift": {
+          "drift_nt_per_min": 1.7562539299471842,
+          "drift_azimuth_deg": 95.20773173536595,
+          "drift_vertical_fraction": 0.15
+        },
+        "bayes_fusion": {
+          "dipole_fit_target_z": -1.1851730566076197
+        },
+        "mission_manager": {
+          "region_seeds": [
+            -120.0,
+            -118.36193152530967,
+            -33.333,
+            -107.04731881691768,
+            53.333,
+            -131.89240494245365
+          ]
+        },
+        "plotter": {
+          "target_x": -101.00084058555622,
+          "target_y": -79.32707988946031
+        }
+      },
+      "mission_complete": true,
+      "mission_status": "MISSION_COMPLETE:verifier=asv2:conf=4:p=0.619",
+      "verify_success": true,
+      "verify_confirmations": 4,
+      "fix_x": -105.5318170586497,
+      "fix_y": -77.6193653055259,
+      "fix_error_m": 4.842110789718554,
+      "fix_rms_nt": 8.32981889645835,
+      "centroid_x": -105.0,
+      "centroid_y": -88.79920179502676,
+      "centroid_error_m": 10.281749336374924,
+      "peak_x": -105.0,
+      "peak_y": -85.0,
+      "peak_error_m": 6.9408427876375365,
+      "verify_candidate_x": -105.0,
+      "verify_candidate_y": -88.79920179502676,
+      "verify_candidate_error_m": 10.281749336374924,
+      "localization_error_m": 4.842110789718554,
+      "localization_source": "fix",
+      "timed_out": false,
+      "wall_time_s": 242.2921802997589,
+      "domain_id": 68
+    },
+    {
+      "trial_id": 19,
+      "random_seed": 7614312,
+      "ground_truth": {
+        "target_x": -83.11842394101227,
+        "target_y": -90.93562513796286,
+        "target_z": -1.0927552594546641,
+        "dipole_peak_nt": 44.07194624654906,
+        "dipole_mx": 2010.1857868296886,
+        "dipole_my": -27849.0570727267,
+        "dipole_mz": -132734.9998566276,
+        "synthetic_noise_nt": 6.023285309971586,
+        "mag_baseline_drift_nt_per_min": 0.8471515451274527,
+        "mag_baseline_drift_azimuth_deg": 99.6048806300106,
+        "region_seeds": [
+          -120.0,
+          -107.83990526762031,
+          -33.333,
+          -109.61688860115433,
+          53.333,
+          -132.231045968618
+        ]
+      },
+      "launch_overrides": {
+        "mag_driver": {
+          "target_x": -83.11842394101227,
+          "target_y": -90.93562513796286,
+          "target_z": -1.0927552594546641,
+          "dipole_peak_nt": 44.07194624654906,
+          "dipole_mx": 2010.1857868296886,
+          "dipole_my": -27849.0570727267,
+          "dipole_mz": -132734.9998566276,
+          "dipole_soft_m": 11.5,
+          "synthetic_noise_nt": 6.023285309971586,
+          "random_seed": 7614312,
+          "raw_topic": "mag/plant"
+        },
+        "mag_baseline_drift": {
+          "drift_nt_per_min": 0.8471515451274527,
+          "drift_azimuth_deg": 99.6048806300106,
+          "drift_vertical_fraction": 0.15
+        },
+        "bayes_fusion": {
+          "dipole_fit_target_z": -1.0927552594546641
+        },
+        "mission_manager": {
+          "region_seeds": [
+            -120.0,
+            -107.83990526762031,
+            -33.333,
+            -109.61688860115433,
+            53.333,
+            -132.231045968618
+          ]
+        },
+        "plotter": {
+          "target_x": -83.11842394101227,
+          "target_y": -90.93562513796286
+        }
+      },
+      "mission_complete": true,
+      "mission_status": "MISSION_COMPLETE:verifier=asv2:conf=4:p=0.980",
+      "verify_success": true,
+      "verify_confirmations": 4,
+      "fix_x": -83.00346051468578,
+      "fix_y": -90.68865563355534,
+      "fix_error_m": 0.2724160889155027,
+      "fix_rms_nt": 19.985690711308724,
+      "centroid_x": -85.0,
+      "centroid_y": -94.99999999999999,
+      "centroid_error_m": 4.478780133576008,
+      "peak_x": -85.0,
+      "peak_y": -95.0,
+      "peak_error_m": 4.478780133576021,
+      "verify_candidate_x": -85.0,
+      "verify_candidate_y": -95.0,
+      "verify_candidate_error_m": 4.478780133576021,
+      "localization_error_m": 0.2724160889155027,
+      "localization_source": "fix",
+      "timed_out": false,
+      "wall_time_s": 298.18239998817444,
+      "domain_id": 69
+    }
+  ]
+}

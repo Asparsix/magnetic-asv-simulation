@@ -22,6 +22,7 @@ setup(
             'mag_driver = boat_sensing.mag_driver:main',
             'mag_filter = boat_sensing.mag_filter:main',
             'calibration_node = boat_sensing.calibration_node:main',
+            'monte_carlo_mag_drift = boat_sensing.monte_carlo_mag_drift:main',
         ],
     },
 )
